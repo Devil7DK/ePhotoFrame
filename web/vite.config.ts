@@ -9,10 +9,12 @@ import { gzipSync } from "zlib";
 
 configDotenv();
 
-function writeProgmem() {
+function writeProgmem(): Plugin {
   return {
     name: "write-progmem",
     closeBundle() {
+      if (this.environment.mode !== "build") return;
+
       const startTime = Date.now();
 
       const distPath = resolve(__dirname, "dist");
@@ -73,7 +75,11 @@ function mockAPIs(): Plugin {
     { ssid: "Cafe-Free", rssi: -88, encryption: 0 },
   ];
 
-  function json(res: import("http").ServerResponse, status: number, body: unknown) {
+  function json(
+    res: import("http").ServerResponse,
+    status: number,
+    body: unknown,
+  ) {
     res.statusCode = status;
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify(body));
