@@ -35,7 +35,7 @@ bool config_load() {
   }
 
   const char* ssid = doc["wifi"]["ssid"] | "";
-  const char* pwd  = doc["wifi"]["password"] | "";
+  const char* pwd = doc["wifi"]["password"] | "";
   strlcpy(cfg.ssid, ssid, sizeof(cfg.ssid));
   strlcpy(cfg.password, pwd, sizeof(cfg.password));
   cfg.autoplay_ms = doc["autoplay_ms"] | 0;
@@ -49,8 +49,12 @@ bool config_has_wifi() {
   return cfg.ssid[0] != '\0';
 }
 
-const char* config_get_ssid() { return cfg.ssid; }
-const char* config_get_password() { return cfg.password; }
+const char* config_get_ssid() {
+  return cfg.ssid;
+}
+const char* config_get_password() {
+  return cfg.password;
+}
 
 void config_set_wifi(const char* ssid, const char* password) {
   strlcpy(cfg.ssid, ssid ? ssid : "", sizeof(cfg.ssid));
@@ -58,7 +62,9 @@ void config_set_wifi(const char* ssid, const char* password) {
   config_request_save();
 }
 
-uint32_t config_get_autoplay_ms() { return cfg.autoplay_ms; }
+uint32_t config_get_autoplay_ms() {
+  return cfg.autoplay_ms;
+}
 
 void config_set_autoplay_ms(uint32_t ms) {
   cfg.autoplay_ms = ms;
