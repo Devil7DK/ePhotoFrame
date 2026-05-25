@@ -4,7 +4,7 @@ import { cyan, green } from "kolorist";
 import { join, resolve } from "path";
 import { defineConfig } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
-import { brotliCompressSync, constants } from "zlib";
+import { gzipSync } from "zlib";
 
 function writeProgmem() {
   return {
@@ -21,16 +21,10 @@ const startTime = Date.now();
       }
 
       const indexContent = readFileSync(indexPath, "utf-8");
-      const compressed = brotliCompressSync(Buffer.from(indexContent), {
-        params: {
-          [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT,
-          [constants.BROTLI_PARAM_QUALITY]: 11,
-          [constants.BROTLI_PARAM_LGWIN]: 22,
-        },
-      });
+      const compressed = gzipSync(Buffer.from(indexContent), { level: 9 });
 
       if (!compressed) {
-        console.error("Brotli compression failed");
+        console.error("Gzip compression failed");
         return;
       }
 
@@ -50,7 +44,7 @@ const startTime = Date.now();
       writeFileSync(join(outputDir, "HtmlData.cpp"), cppContent);
 
       console.log(
-        green(`✓ Compressed HTML to ${cyan(new Intl.NumberFormat().format(compressed.length))} bytes in ${cyan(`${((Date.now() - startTime))}ms`)} and wrote to HtmlData.h/cpp`),
+        green(`✓ Gzipped HTML to ${cyan(new Intl.NumberFormat().format(compressed.length))} bytes in ${cyan(`${((Date.now() - startTime))}ms`)} and wrote to HtmlData.h/cpp`),
       );
     },
   };
