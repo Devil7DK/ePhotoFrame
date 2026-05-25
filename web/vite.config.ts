@@ -36,11 +36,13 @@ const startTime = Date.now();
 
       const headerContent = `#ifndef HTMLDATA_H\n#define HTMLDATA_H\n\n#include <Arduino.h>\n\nextern const uint8_t HTML_DATA[${compressed.length}];\n\n#endif\n`;
 
-      const cppContent = `#include "HtmlData.h"\nconst uint8_t HTML_DATA[${compressed.length}] PROGMEM = {\n${compressed
-        .toString("hex")
-        .match(/.{1,200}/g)
-        ?.map((line) => line.match(/.{1,2}/g)?.join(", "))
-        .join(",\n")}`;
+      const BYTES_PER_LINE = 30;
+      const lines: string[] = [];
+      for (let i = 0; i < compressed.length; i += BYTES_PER_LINE) {
+        const chunk = compressed.subarray(i, i + BYTES_PER_LINE);
+        lines.push(Array.from(chunk).join(","));
+      }
+      const cppContent = `#include "HtmlData.h"\n\nconst uint8_t HTML_DATA[${compressed.length}] PROGMEM = {\n${lines.join(",\n")}\n};\n`;
 
       const outputDir = resolve(__dirname, "..");
 
