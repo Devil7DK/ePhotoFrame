@@ -1,11 +1,63 @@
-import { defineConfig } from "vite";
 import preact from "@preact/preset-vite";
+import { existsSync, readFileSync, writeFileSync } from "fs";
+import { cyan, green } from "kolorist";
+import { join, resolve } from "path";
+import { defineConfig } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
+import { brotliCompressSync, constants } from "zlib";
+
+function writeProgmem() {
+  return {
+    name: "write-progmem",
+    closeBundle() {
+const startTime = Date.now();
+
+      const distPath = resolve(__dirname, "dist");
+      const indexPath = join(distPath, "index.html");
+
+      if (!existsSync(indexPath)) {
+        console.error("index.html not found in dist folder");
+        return;
+      }
+
+      const indexContent = readFileSync(indexPath, "utf-8");
+      const compressed = brotliCompressSync(Buffer.from(indexContent), {
+        params: {
+          [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT,
+          [constants.BROTLI_PARAM_QUALITY]: 11,
+          [constants.BROTLI_PARAM_LGWIN]: 22,
+        },
+      });
+
+      if (!compressed) {
+        console.error("Brotli compression failed");
+        return;
+      }
+
+      const headerContent = `#ifndef HTMLDATA_H\n#define HTMLDATA_H\n\n#include <Arduino.h>\n\nextern const uint8_t HTML_DATA[${compressed.length}];\n\n#endif\n`;
+
+      const cppContent = `#include "HtmlData.h"\nconst uint8_t HTML_DATA[${compressed.length}] PROGMEM = {\n${compressed
+        .toString("hex")
+        .match(/.{1,200}/g)
+        ?.map((line) => line.match(/.{1,2}/g)?.join(", "))
+        .join(",\n")}`;
+
+      const outputDir = resolve(__dirname, "..");
+
+      writeFileSync(join(outputDir, "HtmlData.h"), headerContent);
+      writeFileSync(join(outputDir, "HtmlData.cpp"), cppContent);
+
+      console.log(
+        green(`✓ Compressed HTML to ${cyan(new Intl.NumberFormat().format(compressed.length))} bytes in ${cyan(`${((Date.now() - startTime))}ms`)} and wrote to HtmlData.h/cpp`),
+      );
+    },
+  };
+}
 
 // https://vite.dev/config/
 export default defineConfig({
   css: {
     transformer: "lightningcss",
   },
-  plugins: [preact(), viteSingleFile()],
+  plugins: [preact(), viteSingleFile(), writeProgmem()],
 });
