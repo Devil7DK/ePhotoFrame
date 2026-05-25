@@ -1,0 +1,76 @@
+#include "photos.h"
+#include <Arduino.h>
+#include <lvgl.h>
+#include <SD.h>
+#include <FS.h>
+
+#define IMAGE_FOLDER "/images"
+#define MAX_PHOTOS 32
+
+static String photo_paths[MAX_PHOTOS];
+static int photo_count = 0;
+static int current_index = 0;
+static lv_obj_t *img_obj = nullptr;
+
+static void show_at(int idx) {
+  Serial.print("[INFO] Loading photo: ");
+  Serial.println(photo_paths[idx].c_str());
+
+  if (img_obj)
+    lv_obj_del(img_obj);
+  img_obj = lv_image_create(lv_screen_active());
+  lv_image_set_src(img_obj, photo_paths[idx].c_str());
+  lv_obj_center(img_obj);
+  lv_obj_move_background(img_obj);
+  lv_obj_clear_flag(img_obj, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_clear_flag(img_obj, LV_OBJ_FLAG_SCROLLABLE);
+}
+
+void photos_scan() {
+  photo_count = 0;
+  File root = SD.open(IMAGE_FOLDER);
+  if (!root || !root.isDirectory()) {
+    Serial.println("[WARN] SD image folder not found");
+    return;
+  }
+
+  File file = root.openNextFile();
+  while (file && photo_count < MAX_PHOTOS) {
+    if (!file.isDirectory()) {
+      String fname = file.name();
+      fname.toLowerCase();
+      if (fname.endsWith(".bin")) {
+        String fullPath = String("D:") + IMAGE_FOLDER + "/" + fname;
+        Serial.print("[INFO] Found photo: ");
+        Serial.println(fullPath);
+        photo_paths[photo_count++] = fullPath;
+      }
+    }
+    file = root.openNextFile();
+  }
+}
+
+int photos_count() {
+  return photo_count;
+}
+
+void photos_show_first() {
+  if (photo_count == 0)
+    return;
+  current_index = 0;
+  show_at(current_index);
+}
+
+void photos_show_next() {
+  if (photo_count == 0)
+    return;
+  current_index = (current_index + 1) % photo_count;
+  show_at(current_index);
+}
+
+void photos_show_prev() {
+  if (photo_count == 0)
+    return;
+  current_index = (current_index - 1 + photo_count) % photo_count;
+  show_at(current_index);
+}
