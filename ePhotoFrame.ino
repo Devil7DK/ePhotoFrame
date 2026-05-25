@@ -1,5 +1,6 @@
 #include <lvgl.h>
 
+#include "config.h"
 #include "display.h"
 #include "storage.h"
 #include "photos.h"
@@ -13,6 +14,7 @@ void setup() {
   display_init_tft();
   storage_init();
   display_init_lvgl();
+  config_load();
 
   photos_scan();
   ui_create();
@@ -20,5 +22,6 @@ void setup() {
 
 void loop() {
   lv_timer_handler();
+  config_commit_pending();
   delay(5);
 }

@@ -1,4 +1,5 @@
 #include "photos.h"
+#include "storage.h"
 #include <Arduino.h>
 #include <lvgl.h>
 #include <SD.h>
@@ -19,7 +20,12 @@ static void show_at(int idx) {
   if (img_obj)
     lv_obj_del(img_obj);
   img_obj = lv_image_create(lv_screen_active());
+  if (!storage_sd_lock()) {
+    Serial.println("[WARN] SD busy, skipping image load");
+    return;
+  }
   lv_image_set_src(img_obj, photo_paths[idx].c_str());
+  storage_sd_unlock();
   lv_obj_center(img_obj);
   lv_obj_move_background(img_obj);
   lv_obj_clear_flag(img_obj, LV_OBJ_FLAG_CLICKABLE);
@@ -28,9 +34,14 @@ static void show_at(int idx) {
 
 void photos_scan() {
   photo_count = 0;
+  if (!storage_sd_lock()) {
+    Serial.println("[WARN] SD busy, skipping photo scan");
+    return;
+  }
   File root = SD.open(IMAGE_FOLDER);
   if (!root || !root.isDirectory()) {
     Serial.println("[WARN] SD image folder not found");
+    storage_sd_unlock();
     return;
   }
 
@@ -48,6 +59,7 @@ void photos_scan() {
     }
     file = root.openNextFile();
   }
+  storage_sd_unlock();
 }
 
 int photos_count() {
