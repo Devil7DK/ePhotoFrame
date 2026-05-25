@@ -1,0 +1,20 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="96" fill="#2563EB"/>
+  <rect x="78" y="62" width="356" height="300" rx="34" fill="white"/>
+  <rect x="105" y="90" width="302" height="245" rx="20" fill="#DCEEFF"/>
+  <circle cx="188" cy="165" r="30" fill="#FACC15"/>
+  <path d="M105 286L225 188L310 258L407 160V335H105V286Z" fill="#60A5FA"/>
+  <path d="M225 335L335 178L407 250V335H225Z" fill="#2563EB"/>
+  <path d="M105 306C170 270 245 266 325 280C362 287 390 300 407 318V335H105V306Z" fill="#4ADE80"/>
+  <rect x="228" y="344" width="56" height="10" rx="5" fill="#64748B"/>
+  <text x="256"
+        y="442"
+        text-anchor="middle"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="56"
+        font-weight="700"
+        letter-spacing="-1"
+        fill="white">
+    ePhotoFrame
+  </text>
+</svg>
