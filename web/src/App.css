@@ -5,3 +5,10 @@ div#root {
   position: fixed;
   inset: 0;
 }
+
+form {
+  display: flex;
+  flex-direction: column;
+
+  padding: 1em;
+}
