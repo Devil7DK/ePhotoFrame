@@ -1,90 +1,39 @@
 import "./App.css";
 
-import type { SubmitEventHandler } from "preact";
-import { useCallback, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 
-import {
-  downloadBlob,
-  processFile
-} from "./utils";
+import { ManageView } from "./ManageView";
+import { SetupView } from "./SetupView";
+
+type Mode = "setup" | "manage";
 
 export const App = () => {
-  const [logs, setLogs] = useState<string[]>([]);
+  const [mode, setMode] = useState<Mode | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const logLine = useCallback((line: string) => {
-    setLogs((logs) => [...logs, line]);
+  useEffect(() => {
+    fetch("/api/mode")
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d: { mode: Mode }) => setMode(d.mode))
+      .catch((e) => setError(String(e)));
   }, []);
 
-  const onSubmit: SubmitEventHandler<HTMLFormElement> = useCallback(
-    async (e) => {
-      e.preventDefault();
-
-      const formData = new FormData(e.currentTarget);
-
-      const files = formData.getAll("files").filter((f) => f instanceof File);
-      const orientation = formData.get("orient");
-
-      const [dstW, dstH] =
-        orientation === "landscape" ? [320, 240] : [240, 320];
-
-      let succeeded = 0,
-        failed = 0;
-      for (const file of files) {
-        try {
-          logLine(`Processing ${file.name}...`);
-          const blob = await processFile(file, dstW, dstH);
-          const stem = file.name.replace(/\.[^.]+$/, "");
-
-          downloadBlob(blob, `${stem}.bin`);
-          logLine(`  -> ${stem}.bin`);
-          succeeded++;
-
-          await new Promise((r) => setTimeout(r, 50));
-        } catch (err) {
-          logLine(`  x ${(err as Error).message}`);
-          failed++;
-        }
-      }
-      logLine(
-        `Done. ${succeeded} succeeded${failed ? `, ${failed} failed` : ""}.`,
-      );
-    },
-    [logLine],
-  );
-
-  return (
-    <div>
-      <form onSubmit={onSubmit}>
-        <p>
-          <label>
-            Images:{" "}
-            <input
-              name="files"
-              type="file"
-              accept="image/*"
-              multiple
-              required
-            />
-          </label>
-        </p>
-        <p>
-          Orientation:
-          <label>
-            <input name="orient" type="radio" value="landscape" checked />{" "}
-            Landscape (320x240)
-          </label>
-          <label>
-            <input name="orient" type="radio" value="portrait" /> Portrait
-            (240x320)
-          </label>
-        </p>
-
-        <p>
-          <button type="submit">Process &amp; download</button>
-        </p>
-      </form>
-
-      <pre>{logs.join("\n")}</pre>
-    </div>
-  );
+  if (error) {
+    return (
+      <div class="status">
+        <p>Failed to load: {error}</p>
+      </div>
+    );
+  }
+  if (!mode) {
+    return (
+      <div class="status">
+        <p>Loading…</p>
+      </div>
+    );
+  }
+  return mode === "setup" ? <SetupView /> : <ManageView />;
 };

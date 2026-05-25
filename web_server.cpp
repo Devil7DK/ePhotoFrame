@@ -4,6 +4,7 @@
 #include "HtmlData.h"
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
+#include <AsyncJson.h>
 #include <ArduinoJson.h>
 
 static AsyncWebServer server(80);
@@ -61,6 +62,47 @@ static void register_routes() {
     serializeJson(doc, out);
     req->send(200, "application/json", out);
   });
+
+  server.on("/api/networks", HTTP_GET, [](AsyncWebServerRequest *req) {
+    // Kick a fresh async scan in the background; the next GET returns newer
+    // results. If one is already running, this is a no-op.
+    wifi_scan_async();
+    req->send(200, "application/json", wifi_scan_results_json());
+  });
+
+  // POST /api/config — L4: JSON body handler avoids the manual _tempObject
+  // accumulator pattern and the leak-on-abort hazard it carries.
+  auto *configPost = new AsyncCallbackJsonWebHandler(
+    "/api/config",
+    [](AsyncWebServerRequest *req, JsonVariant &json) {
+      if (current_mode != MODE_SETUP) {
+        req->send(403, "application/json", "{\"error\":\"setup mode only\"}");
+        return;
+      }
+      JsonObject wifi = json["wifi"];
+      if (!wifi["ssid"].is<const char *>()) {
+        req->send(400, "application/json", "{\"error\":\"missing wifi.ssid\"}");
+        return;
+      }
+      const char *ssid = wifi["ssid"];
+      const char *pwd  = wifi["password"] | "";
+      size_t ssid_len = strlen(ssid);
+      size_t pwd_len  = strlen(pwd);
+      if (ssid_len == 0) {
+        req->send(400, "application/json", "{\"error\":\"empty ssid\"}");
+        return;
+      }
+      if (ssid_len >= 33 || pwd_len >= 65) {
+        req->send(400, "application/json", "{\"error\":\"ssid or password too long\"}");
+        return;
+      }
+      config_set_wifi(ssid, pwd);
+      config_commit_pending(true);  // L13: bypass debounce; we're about to restart.
+      req->send(200, "application/json", "{\"ok\":true,\"restarting\":true}");
+      restart_requested = true;     // L5: ESP.restart() runs from loop() once response flushes.
+    });
+  configPost->setMethod(HTTP_POST);
+  server.addHandler(configPost);
 }
 
 void web_server_begin(WebMode mode) {
