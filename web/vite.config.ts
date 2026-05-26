@@ -175,6 +175,25 @@ function mockAPIs(): Plugin {
           return json(res, 200, { ok: true, restarting: true });
         }
 
+        if (p === "/api/config/autoplay" && req.method === "POST") {
+          if (MODE !== "manage") return json(res, 403, { error: "manage mode only" });
+          const body = await readBody(req);
+          let parsed: { autoplay_ms?: number };
+          try {
+            parsed = JSON.parse(body);
+          } catch {
+            return json(res, 400, { error: "bad json" });
+          }
+          const ms = parsed?.autoplay_ms;
+          if (typeof ms !== "number") return json(res, 400, { error: "missing autoplay_ms" });
+          if (ms < 0) return json(res, 400, { error: "autoplay_ms must be >= 0" });
+          if (ms > 0 && ms < 10000) return json(res, 400, { error: "autoplay_ms must be 0 or >= 10000" });
+          if (ms > 3600000) return json(res, 400, { error: "autoplay_ms must be <= 3600000" });
+          await delay(150);
+          state.autoplay_ms = ms;
+          return json(res, 200, { ok: true });
+        }
+
         if (p === "/api/wifi-reset" && req.method === "POST") {
           if (MODE !== "manage") return json(res, 403, { error: "manage mode only" });
           await delay(200);

@@ -39,6 +39,24 @@ async function postAction(path: string): Promise<void> {
   }
 }
 
+async function fetchConfig(): Promise<{ autoplay_ms: number }> {
+  const r = await fetch("/api/config");
+  if (!r.ok) throw new Error(`config fetch failed: HTTP ${r.status}`);
+  return r.json();
+}
+
+async function postAutoplay(ms: number): Promise<void> {
+  const r = await fetch("/api/config/autoplay", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ autoplay_ms: ms }),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.error ?? `HTTP ${r.status}`);
+  }
+}
+
 export const ManageView = () => {
   const [images, setImages] = useState<ImageEntry[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -49,6 +67,10 @@ export const ManageView = () => {
     null | "restart" | "wifi-reset" | "factory-reset"
   >(null);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
+
+  const [autoplaySec, setAutoplaySec] = useState<string>("");
+  const [autoplaySaving, setAutoplaySaving] = useState(false);
+  const [autoplayMsg, setAutoplayMsg] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setListError(null);
@@ -62,6 +84,42 @@ export const ManageView = () => {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    fetchConfig()
+      .then((cfg) => setAutoplaySec(String((cfg.autoplay_ms ?? 0) / 1000)))
+      .catch((e) => setAutoplayMsg(`Failed to load: ${e}`));
+  }, []);
+
+  const onSaveAutoplay: SubmitEventHandler<HTMLFormElement> = useCallback(
+    async (e) => {
+      e.preventDefault();
+      const seconds = Number(autoplaySec);
+      if (!Number.isFinite(seconds) || seconds < 0) {
+        setAutoplayMsg("Enter a non-negative number of seconds (0 = off).");
+        return;
+      }
+      if (seconds > 0 && seconds < 10) {
+        setAutoplayMsg("Interval must be 0 (off) or at least 10 seconds.");
+        return;
+      }
+      if (seconds > 3600) {
+        setAutoplayMsg("Interval must be at most 3600 seconds (1 hour).");
+        return;
+      }
+      setAutoplaySaving(true);
+      setAutoplayMsg(null);
+      try {
+        await postAutoplay(Math.round(seconds * 1000));
+        setAutoplayMsg(seconds === 0 ? "Autoplay disabled." : `Autoplay set to ${seconds}s.`);
+      } catch (err) {
+        setAutoplayMsg(String((err as Error).message ?? err));
+      } finally {
+        setAutoplaySaving(false);
+      }
+    },
+    [autoplaySec],
+  );
 
   const onDelete = useCallback(
     async (name: string) => {
@@ -231,6 +289,45 @@ export const ManageView = () => {
           </p>
         </form>
         {uploadLog.length > 0 && <pre>{uploadLog.join("\n")}</pre>}
+      </section>
+
+      <section class="autoplay">
+        <h2>Autoplay</h2>
+        <p class="muted">
+          Auto-advance to the next photo after this many seconds. Minimum 10 s
+          (lower values can advance before the previous image finishes loading
+          from SD). Set to 0 to disable. Tapping prev/next on the device pauses
+          autoplay for one full interval.
+        </p>
+        <form onSubmit={onSaveAutoplay}>
+          <p>
+            <label>
+              Interval (seconds):{" "}
+              <input
+                type="number"
+                min={0}
+                max={3600}
+                step={1}
+                value={autoplaySec}
+                onInput={(e) => setAutoplaySec(e.currentTarget.value)}
+                disabled={autoplaySaving}
+              />
+            </label>
+          </p>
+          <p>
+            <button type="submit" disabled={autoplaySaving}>
+              {autoplaySaving ? "Saving…" : "Save"}
+            </button>
+            {autoplayMsg && (
+              <span
+                class={autoplayMsg.startsWith("Autoplay") ? "muted" : "error"}
+                style="margin-left: 0.5em"
+              >
+                {autoplayMsg}
+              </span>
+            )}
+          </p>
+        </form>
       </section>
 
       <section class="actions">

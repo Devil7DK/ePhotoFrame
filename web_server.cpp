@@ -57,7 +57,8 @@ static void register_routes() {
     req->send(200, "application/json", out);
   });
 
-  server.on("/api/config", HTTP_GET, [](AsyncWebServerRequest *req) {
+  // exact() matcher so this doesn't also catch GET /api/config/anything.
+  server.on(AsyncURIMatcher::exact("/api/config"), HTTP_GET, [](AsyncWebServerRequest *req) {
     // Never include the password.
     JsonDocument doc;
     JsonObject wifi = doc["wifi"].to<JsonObject>();
@@ -78,8 +79,10 @@ static void register_routes() {
 
   // POST /api/config — L4: JSON body handler avoids the manual _tempObject
   // accumulator pattern and the leak-on-abort hazard it carries.
+  // exact() matcher: the default BackwardCompatible matcher also matches any
+  // path starting with "/api/config/", which would shadow /api/config/autoplay.
   auto *configPost = new AsyncCallbackJsonWebHandler(
-    "/api/config",
+    AsyncURIMatcher::exact("/api/config"),
     [](AsyncWebServerRequest *req, JsonVariant &json) {
       if (current_mode != MODE_SETUP) {
         req->send(403, "application/json", "{\"error\":\"setup mode only\"}");
@@ -109,6 +112,43 @@ static void register_routes() {
     });
   configPost->setMethod(HTTP_POST);
   server.addHandler(configPost);
+
+  // POST /api/config/autoplay — manage-mode-only knob for the autoplay
+  // interval. 0 disables; otherwise must be >= 10 s and <= 1 h. The 10-s floor
+  // is so the next image isn't requested before the previous one has finished
+  // decoding from SD on the LVGL task. Saved via the normal debounced config
+  // commit (no restart required).
+  auto *autoplayPost = new AsyncCallbackJsonWebHandler(
+    "/api/config/autoplay",
+    [](AsyncWebServerRequest *req, JsonVariant &json) {
+      if (current_mode != MODE_MANAGE) {
+        req->send(403, "application/json", "{\"error\":\"manage mode only\"}");
+        return;
+      }
+      if (!json["autoplay_ms"].is<uint32_t>() &&
+          !json["autoplay_ms"].is<int>()) {
+        req->send(400, "application/json", "{\"error\":\"missing autoplay_ms\"}");
+        return;
+      }
+      long ms = json["autoplay_ms"].as<long>();
+      if (ms < 0) {
+        req->send(400, "application/json", "{\"error\":\"autoplay_ms must be >= 0\"}");
+        return;
+      }
+      if (ms > 0 && ms < 10000) {
+        req->send(400, "application/json", "{\"error\":\"autoplay_ms must be 0 or >= 10000\"}");
+        return;
+      }
+      if (ms > 3600000) {
+        req->send(400, "application/json", "{\"error\":\"autoplay_ms must be <= 3600000\"}");
+        return;
+      }
+      config_set_autoplay_ms((uint32_t)ms);
+      config_commit_pending(true);
+      req->send(200, "application/json", "{\"ok\":true}");
+    });
+  autoplayPost->setMethod(HTTP_POST);
+  server.addHandler(autoplayPost);
 
   server.on("/api/restart", HTTP_POST, [](AsyncWebServerRequest *req) {
     req->send(200, "application/json", "{\"ok\":true,\"restarting\":true}");

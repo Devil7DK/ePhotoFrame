@@ -19,6 +19,7 @@ static bool restart_requested = false;
 static bool enter_manage_requested = false;
 
 static bool in_manage_mode = false;
+static bool in_photos_mode = false;
 static lv_obj_t *manage_status_label = nullptr;
 static WifiStatus last_wifi_status_shown = WIFI_ST_DISCONNECTED;
 
@@ -56,6 +57,7 @@ static void on_restart_clicked(lv_event_t *) {
 
 static void reset_screen() {
   in_manage_mode = false;
+  in_photos_mode = false;
   manage_status_label = nullptr;
   lv_obj_clean(lv_screen_active());
   photos_reset();
@@ -111,6 +113,7 @@ void ui_show_setup_screen() {
 
 void ui_show_photos() {
   reset_screen();
+  in_photos_mode = true;
 
   lv_obj_t *btn_settings = lv_button_create(lv_screen_active());
   lv_obj_set_size(btn_settings, 32, 32);
@@ -221,6 +224,7 @@ static void update_manage_status_if_changed() {
 
 void ui_update() {
   update_manage_status_if_changed();
+  if (in_photos_mode) photos_update();
 
   if (pending == PendingAction::NONE) return;
   PendingAction action = pending;

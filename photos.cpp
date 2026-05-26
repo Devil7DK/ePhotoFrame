@@ -1,4 +1,5 @@
 #include "photos.h"
+#include "config.h"
 #include "storage.h"
 #include <Arduino.h>
 #include <lvgl.h>
@@ -12,6 +13,7 @@ static String photo_paths[MAX_PHOTOS];
 static int photo_count = 0;
 static int current_index = 0;
 static lv_obj_t *img_obj = nullptr;
+static unsigned long last_advance_ms = 0;
 
 static void show_at(int idx) {
   Serial.print("[INFO] Loading photo: ");
@@ -33,10 +35,19 @@ static void show_at(int idx) {
   lv_image_set_src(img_obj, photo_paths[idx].c_str());
   storage_sd_unlock();
   lv_obj_center(img_obj);
+  last_advance_ms = millis();
 }
 
 void photos_reset() {
   img_obj = nullptr;
+}
+
+void photos_update() {
+  uint32_t interval = config_get_autoplay_ms();
+  if (interval == 0) return;        // autoplay disabled
+  if (photo_count <= 1) return;     // nothing to cycle through
+  if (millis() - last_advance_ms < interval) return;
+  photos_show_next();                // show_at resets last_advance_ms
 }
 
 void photos_scan() {
