@@ -678,6 +678,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"cropperjs@npm:^1":
+  version: 1.6.2
+  resolution: "cropperjs@npm:1.6.2"
+  checksum: 10c0/5002e0cc3a491ceb8a104b2cb7a7c335a03e109fe590653f3aeefa27ca7115466edae62afc8ba21105bbaad4134583f5057ebbf5e8d843c7b2c1c1f0779630e9
+  languageName: node
+  linkType: hard
+
 "css-select@npm:^5.1.0":
   version: 5.2.2
   resolution: "css-select@npm:5.2.2"
@@ -770,6 +777,7 @@ __metadata:
     "@preact/preset-vite": "npm:^2.10.5"
     "@types/babel__core": "npm:^7"
     "@types/node": "npm:^24.12.3"
+    cropperjs: "npm:^1"
     dotenv: "npm:^17.4.2"
     kolorist: "npm:^1.6.0"
     preact: "npm:^10.29.1"

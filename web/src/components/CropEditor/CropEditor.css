@@ -1,0 +1,86 @@
+div.crop-editor-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(2px);
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  z-index: 1100;
+
+  > div.crop-editor {
+    width: 100%;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+
+    > header {
+      display: flex;
+      align-items: baseline;
+      gap: 0.75rem;
+      padding: 0.875rem 1rem;
+      border-bottom: 1px solid var(--border);
+      flex: 0 0 auto;
+
+      > h2 {
+        margin: 0;
+        font-size: 1.125rem;
+      }
+
+      > .muted {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+    }
+
+    > .crop-area {
+      flex: 1 1 auto;
+      min-height: 0;
+      background: #000;
+      position: relative;
+      overflow: hidden;
+
+      > img {
+        display: block;
+        max-width: 100%;
+        max-height: 100%;
+      }
+    }
+
+    > .actions {
+      display: flex;
+      flex-direction: row;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      padding: 0.75rem 1rem;
+      border-top: 1px solid var(--border);
+      flex: 0 0 auto;
+
+      > button {
+        min-width: 6rem;
+      }
+    }
+  }
+}
+
+@media (min-width: 32rem) {
+  div.crop-editor-backdrop {
+    align-items: center;
+    padding: 1rem;
+
+    > div.crop-editor {
+      max-width: 40rem;
+      max-height: 90vh;
+      border-radius: var(--radius);
+    }
+  }
+}

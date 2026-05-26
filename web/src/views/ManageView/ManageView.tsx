@@ -1,12 +1,34 @@
 import "./ManageView.css";
 
-import type { SubmitEventHandler } from "preact";
-import { useCallback, useEffect, useState } from "preact/hooks";
+import type { FunctionalComponent, SubmitEventHandler } from "preact";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 
-import { processFile } from "../../utils";
-import { ConfirmDialog, LvglBinViewer } from "../../components";
+import {
+  calculateCropFill,
+  loadImage,
+  processFile,
+  type CropRegion,
+} from "../../utils";
+import { ConfirmDialog, CropEditor, LvglBinViewer } from "../../components";
 
 type ImageEntry = { name: string; size: number };
+type Orientation = "landscape" | "portrait";
+type QueueStatus = "pending" | "uploading" | "done" | "error";
+
+type QueueItem = {
+  id: string;
+  file: File;
+  sourceUrl: string;
+  width: number;
+  height: number;
+  crop: CropRegion;
+  status: QueueStatus;
+  error?: string;
+};
+
+function orientationDims(o: Orientation): [number, number] {
+  return o === "portrait" ? [240, 320] : [320, 240];
+}
 
 async function fetchImages(): Promise<ImageEntry[]> {
   const r = await fetch("/api/images");
@@ -59,12 +81,58 @@ async function postAutoplay(ms: number): Promise<void> {
   }
 }
 
+const QueuePreview: FunctionalComponent<{
+  item: QueueItem;
+  orientation: Orientation;
+}> = ({ item, orientation }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [dstW, dstH] = orientationDims(orientation);
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    const previewW = 128;
+    const previewH = Math.round((dstH / dstW) * previewW);
+    canvasRef.current.width = previewW;
+    canvasRef.current.height = previewH;
+    const ctx = canvasRef.current.getContext("2d");
+    if (!ctx) return;
+    const img = new Image();
+    img.onload = () => {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(
+        img,
+        item.crop.sx,
+        item.crop.sy,
+        item.crop.sw,
+        item.crop.sh,
+        0,
+        0,
+        previewW,
+        previewH,
+      );
+    };
+    img.src = item.sourceUrl;
+    return () => {
+      img.onload = null;
+    };
+  }, [
+    item.sourceUrl,
+    item.crop.sx,
+    item.crop.sy,
+    item.crop.sw,
+    item.crop.sh,
+    dstW,
+    dstH,
+  ]);
+
+  return <canvas class="preview" ref={canvasRef} />;
+};
+
 export const ManageView = () => {
   const [images, setImages] = useState<ImageEntry[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
-  const [uploadLog, setUploadLog] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
   const [busyAction, setBusyAction] = useState<
     null | "restart" | "wifi-reset" | "factory-reset"
   >(null);
@@ -76,6 +144,14 @@ export const ManageView = () => {
     confirmKind: "danger" | "warn";
     onConfirm: () => void;
   } | null>(null);
+
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [orientation, setOrientation] = useState<Orientation>("landscape");
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const idRef = useRef(0);
+  const queueRef = useRef<QueueItem[]>([]);
 
   const [autoplaySec, setAutoplaySec] = useState<string>("");
   const [autoplaySaving, setAutoplaySaving] = useState(false);
@@ -99,6 +175,33 @@ export const ManageView = () => {
       .then((cfg) => setAutoplaySec(String((cfg.autoplay_ms ?? 0) / 1000)))
       .catch((e) => setAutoplayMsg(`Failed to load: ${e}`));
   }, []);
+
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
+
+  // Revoke every still-live blob URL on unmount.
+  useEffect(() => {
+    return () => {
+      queueRef.current.forEach((it) => URL.revokeObjectURL(it.sourceUrl));
+    };
+  }, []);
+
+  // Orientation flip → re-derive default crops. Any per-image edits get
+  // dropped on purpose: a portrait crop is meaningless once the target is
+  // landscape. Also close any open editor — its aspectRatio is now wrong.
+  useEffect(() => {
+    const [dstW, dstH] = orientationDims(orientation);
+    setQueue((prev) =>
+      prev.map((it) => ({
+        ...it,
+        crop: calculateCropFill(it.width, it.height, dstW, dstH),
+        status: "pending",
+        error: undefined,
+      })),
+    );
+    setEditingId(null);
+  }, [orientation]);
 
   const onSaveAutoplay: SubmitEventHandler<HTMLFormElement> = useCallback(
     async (e) => {
@@ -145,46 +248,133 @@ export const ManageView = () => {
     [refresh],
   );
 
-  const log = useCallback((line: string) => {
-    setUploadLog((prev) => [...prev, line]);
-  }, []);
-
-  const onUpload: SubmitEventHandler<HTMLFormElement> = useCallback(
-    async (e) => {
-      e.preventDefault();
-      const form = e.currentTarget;
-      const fd = new FormData(form);
-      const files = fd.getAll("files").filter((f) => f instanceof File);
-      if (files.length === 0) return;
-      const orientation = fd.get("orient");
-      const [dstW, dstH] = orientation === "portrait" ? [240, 320] : [320, 240];
-
-      setUploading(true);
-      setUploadLog([]);
-      let ok = 0,
-        fail = 0;
-      for (const file of files) {
-        const stem = file.name.replace(/\.[^.]+$/, "");
-        const target = `${stem}.bin`;
+  const addFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const fileArr = Array.from(files).filter((f) =>
+        f.type.startsWith("image/"),
+      );
+      if (fileArr.length === 0) return;
+      const [dstW, dstH] = orientationDims(orientation);
+      const newItems: QueueItem[] = [];
+      for (const file of fileArr) {
         try {
-          log(`Processing ${file.name}...`);
-          const blob = await processFile(file, dstW, dstH);
-          log(`  uploading ${target}...`);
-          await uploadImage(target, blob);
-          log(`  -> ${target}`);
-          ok++;
-        } catch (err) {
-          log(`  x ${(err as Error).message}`);
-          fail++;
+          const img = await loadImage(file);
+          newItems.push({
+            id: String(++idRef.current),
+            file,
+            sourceUrl: URL.createObjectURL(file),
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            crop: calculateCropFill(
+              img.naturalWidth,
+              img.naturalHeight,
+              dstW,
+              dstH,
+            ),
+            status: "pending",
+          });
+        } catch (e) {
+          console.error("Failed to load", file.name, e);
         }
       }
-      log(`Done. ${ok} succeeded${fail ? `, ${fail} failed` : ""}.`);
-      setUploading(false);
-      form.reset();
-      await refresh();
+      if (newItems.length > 0) {
+        setQueue((prev) => [...prev, ...newItems]);
+      }
     },
-    [log, refresh],
+    [orientation],
   );
+
+  const onFileInput = useCallback(
+    (e: Event) => {
+      const target = e.currentTarget as HTMLInputElement;
+      if (target.files) addFiles(target.files);
+      target.value = "";
+    },
+    [addFiles],
+  );
+
+  const onDrop = useCallback(
+    (e: DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+    },
+    [addFiles],
+  );
+
+  const onDragOver = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  }, []);
+
+  const onDragLeave = useCallback(() => {
+    setDragOver(false);
+  }, []);
+
+  const onRemoveQueueItem = useCallback((id: string) => {
+    setQueue((prev) => {
+      const removed = prev.find((it) => it.id === id);
+      if (removed) URL.revokeObjectURL(removed.sourceUrl);
+      return prev.filter((it) => it.id !== id);
+    });
+  }, []);
+
+  const onClearQueue = useCallback(() => {
+    setQueue((prev) => {
+      prev.forEach((it) => URL.revokeObjectURL(it.sourceUrl));
+      return [];
+    });
+  }, []);
+
+  const applyCropEdit = useCallback((id: string, crop: CropRegion) => {
+    setQueue((prev) =>
+      prev.map((it) =>
+        it.id === id
+          ? { ...it, crop, status: "pending", error: undefined }
+          : it,
+      ),
+    );
+    setEditingId(null);
+  }, []);
+
+  const onUploadAll = useCallback(async () => {
+    if (uploading) return;
+    const items = queue.filter(
+      (it) => it.status === "pending" || it.status === "error",
+    );
+    if (items.length === 0) return;
+    setUploading(true);
+    const [dstW, dstH] = orientationDims(orientation);
+    for (const item of items) {
+      setQueue((prev) =>
+        prev.map((it) =>
+          it.id === item.id
+            ? { ...it, status: "uploading", error: undefined }
+            : it,
+        ),
+      );
+      try {
+        const stem = item.file.name.replace(/\.[^.]+$/, "");
+        const target = `${stem}.bin`;
+        const blob = await processFile(item.file, dstW, dstH, item.crop);
+        await uploadImage(target, blob);
+        setQueue((prev) =>
+          prev.map((it) =>
+            it.id === item.id ? { ...it, status: "done" } : it,
+          ),
+        );
+      } catch (err) {
+        const msg = (err as Error).message ?? String(err);
+        setQueue((prev) =>
+          prev.map((it) =>
+            it.id === item.id ? { ...it, status: "error", error: msg } : it,
+          ),
+        );
+      }
+    }
+    setUploading(false);
+    await refresh();
+  }, [queue, uploading, orientation, refresh]);
 
   const runAction = useCallback(
     async (
@@ -240,6 +430,11 @@ export const ManageView = () => {
     );
   }
 
+  const [dstW, dstH] = orientationDims(orientation);
+  const pendingCount = queue.filter(
+    (it) => it.status === "pending" || it.status === "error",
+  ).length;
+
   return (
     <div class="manage-view">
       <h1>ePhotoFrame</h1>
@@ -280,49 +475,115 @@ export const ManageView = () => {
           Images are converted to LVGL RGB565 <code>.bin</code> in your browser
           before upload — the device only stores the bytes.
         </p>
-        <form onSubmit={onUpload}>
-          <p>
-            <label>
-              Files:{" "}
-              <input
-                name="files"
-                type="file"
-                accept="image/*"
-                multiple
-                required
-                disabled={uploading}
-              />
-            </label>
-          </p>
-          <p>
-            Orientation:{" "}
-            <label>
-              <input
-                name="orient"
-                type="radio"
-                value="landscape"
-                checked
-                disabled={uploading}
-              />{" "}
-              Landscape 320×240
-            </label>
-            <label>
-              <input
-                name="orient"
-                type="radio"
-                value="portrait"
-                disabled={uploading}
-              />{" "}
-              Portrait 240×320
-            </label>
-          </p>
-          <p>
-            <button type="submit" disabled={uploading}>
-              {uploading ? "Uploading…" : "Convert & upload"}
-            </button>
-          </p>
-        </form>
-        {uploadLog.length > 0 && <pre>{uploadLog.join("\n")}</pre>}
+
+        <p class="orientation">
+          Orientation:{" "}
+          <label>
+            <input
+              type="radio"
+              name="orient"
+              value="landscape"
+              checked={orientation === "landscape"}
+              onChange={() => setOrientation("landscape")}
+              disabled={uploading}
+            />{" "}
+            Landscape 320×240
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="orient"
+              value="portrait"
+              checked={orientation === "portrait"}
+              onChange={() => setOrientation("portrait")}
+              disabled={uploading}
+            />{" "}
+            Portrait 240×320
+          </label>
+        </p>
+
+        <label
+          class={"drop-zone" + (dragOver ? " drag-over" : "")}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+        >
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={onFileInput}
+            disabled={uploading}
+            hidden
+          />
+          <strong>Drop images here or click to select</strong>
+          <span class="muted">
+            Changing orientation while items are queued resets their crops.
+          </span>
+        </label>
+
+        {queue.length > 0 && (
+          <>
+            <ul class="queue">
+              {queue.map((item) => (
+                <li key={item.id} class={`queue-card status-${item.status}`}>
+                  <QueuePreview item={item} orientation={orientation} />
+                  <div class="meta">
+                    <div class="name">{item.file.name}</div>
+                    <div class="muted dims">
+                      {item.width}×{item.height} → {dstW}×{dstH}
+                    </div>
+                    {item.status === "uploading" && (
+                      <div class="muted">Uploading…</div>
+                    )}
+                    {item.status === "done" && (
+                      <div class="ok">Uploaded ✓</div>
+                    )}
+                    {item.status === "error" && (
+                      <div class="error" title={item.error}>
+                        {item.error ?? "Failed"}
+                      </div>
+                    )}
+                  </div>
+                  <div class="card-actions">
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(item.id)}
+                      disabled={uploading}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveQueueItem(item.id)}
+                      disabled={uploading}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div class="queue-actions">
+              <button type="button" onClick={onClearQueue} disabled={uploading}>
+                Clear all
+              </button>
+              <button
+                type="button"
+                class="primary"
+                onClick={onUploadAll}
+                disabled={uploading || pendingCount === 0}
+              >
+                {uploading
+                  ? "Uploading…"
+                  : pendingCount === 0
+                    ? "All uploaded"
+                    : `Upload ${pendingCount}`}
+              </button>
+            </div>
+          </>
+        )}
       </section>
 
       <section class="autoplay">
@@ -420,6 +681,21 @@ export const ManageView = () => {
         fileName={viewingImage ?? ""}
         onClose={() => setViewingImage(null)}
       />
+
+      {editingId !== null &&
+        (() => {
+          const item = queue.find((it) => it.id === editingId);
+          if (!item) return null;
+          return (
+            <CropEditor
+              file={item.file}
+              aspectRatio={dstW / dstH}
+              initialCrop={item.crop}
+              onConfirm={(crop) => applyCropEdit(item.id, crop)}
+              onCancel={() => setEditingId(null)}
+            />
+          );
+        })()}
 
       {pendingConfirm && (
         <ConfirmDialog

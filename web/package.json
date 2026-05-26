@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "cropperjs": "^1",
     "preact": "^10.29.1"
   },
   "devDependencies": {

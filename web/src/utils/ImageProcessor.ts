@@ -1,15 +1,19 @@
+export interface CropRegion {
+  sx: number;
+  sy: number;
+  sw: number;
+  sh: number;
+}
+
 export async function processFile(
   file: File,
   dstW: number,
   dstH: number,
+  crop?: CropRegion,
 ): Promise<Blob> {
   const img = await loadImage(file);
-  const { sx, sy, sw, sh } = calculateCropFill(
-    img.naturalWidth,
-    img.naturalHeight,
-    dstW,
-    dstH,
-  );
+  const region =
+    crop ?? calculateCropFill(img.naturalWidth, img.naturalHeight, dstW, dstH);
 
   const canvas = document.createElement("canvas");
   canvas.width = dstW;
@@ -22,13 +26,23 @@ export async function processFile(
 
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, dstW, dstH);
+  ctx.drawImage(
+    img,
+    region.sx,
+    region.sy,
+    region.sw,
+    region.sh,
+    0,
+    0,
+    dstW,
+    dstH,
+  );
 
   const imageData = ctx.getImageData(0, 0, dstW, dstH);
   return createLvglBin(imageData);
 }
 
-function loadImage(file: File): Promise<HTMLImageElement> {
+export function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -44,12 +58,12 @@ function loadImage(file: File): Promise<HTMLImageElement> {
   });
 }
 
-function calculateCropFill(
+export function calculateCropFill(
   srcW: number,
   srcH: number,
   dstW: number,
   dstH: number,
-) {
+): CropRegion {
   const srcRatio = srcW / srcH;
   const dstRatio = dstW / dstH;
   if (srcRatio > dstRatio) {

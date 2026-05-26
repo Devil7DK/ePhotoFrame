@@ -207,7 +207,8 @@ button {
     transform: none;
   }
 
-  &[type="submit"] {
+  &[type="submit"],
+  &.primary {
     background: var(--accent);
     border-color: var(--accent);
     color: white;
