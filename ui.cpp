@@ -31,7 +31,7 @@ static WifiStatus last_wifi_status_shown = WIFI_ST_DISCONNECTED;
 // Photos-screen button auto-hide. After this many ms with no touch input the
 // settings/prev/next buttons fade out of the way so the photo isn't obscured.
 // Any touch (including taps on the now-hidden button area) resets the timer.
-static constexpr uint32_t PHOTO_BUTTONS_HIDE_MS = 5000;
+static constexpr uint32_t PHOTO_BUTTONS_HIDE_MS = 10000;
 static lv_obj_t *btn_settings = nullptr;
 static lv_obj_t *btn_prev = nullptr;
 static lv_obj_t *btn_next = nullptr;
