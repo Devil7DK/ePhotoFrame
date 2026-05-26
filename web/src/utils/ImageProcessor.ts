@@ -88,3 +88,44 @@ function createLvglBin(imageData: ImageData) {
 
   return new Blob([buf], { type: "application/octet-stream" });
 }
+
+export async function renderBin(binBlob: Blob, canvas: HTMLCanvasElement) {
+  const buf = await binBlob.arrayBuffer();
+  const view = new DataView(buf);
+
+  // LVGL header
+  const width = view.getUint16(4, true);
+  const height = view.getUint16(6, true);
+
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext("2d");
+
+  if (!ctx) {
+    throw new Error("Failed to get canvas context");
+  }
+
+  const imageData = ctx.createImageData(width, height);
+
+  let offset = 12;
+
+  for (let i = 0; i < width * height; i++) {
+    const rgb565 = view.getUint16(offset, true);
+    offset += 2;
+
+    // RGB565 -> RGB888
+    const r = ((rgb565 >> 11) & 0x1f) << 3;
+    const g = ((rgb565 >> 5) & 0x3f) << 2;
+    const b = (rgb565 & 0x1f) << 3;
+
+    const p = i * 4;
+
+    imageData.data[p] = r;
+    imageData.data[p + 1] = g;
+    imageData.data[p + 2] = b;
+    imageData.data[p + 3] = 255;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}

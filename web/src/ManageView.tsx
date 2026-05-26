@@ -2,6 +2,7 @@ import type { SubmitEventHandler } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 
 import { processFile } from "./utils";
+import { LvglBinViewer } from "./components";
 
 type ImageEntry = { name: string; size: number };
 
@@ -13,10 +14,10 @@ async function fetchImages(): Promise<ImageEntry[]> {
 }
 
 async function uploadImage(name: string, blob: Blob): Promise<void> {
-  const r = await fetch(
-    `/api/images?name=${encodeURIComponent(name)}`,
-    { method: "POST", body: blob },
-  );
+  const r = await fetch(`/api/images?name=${encodeURIComponent(name)}`, {
+    method: "POST",
+    body: blob,
+  });
   if (!r.ok) {
     const err = await r.json().catch(() => ({}));
     throw new Error(err.error ?? `upload failed: HTTP ${r.status}`);
@@ -44,7 +45,10 @@ export const ManageView = () => {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [uploadLog, setUploadLog] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [busyAction, setBusyAction] = useState<null | "restart" | "wifi-reset" | "factory-reset">(null);
+  const [busyAction, setBusyAction] = useState<
+    null | "restart" | "wifi-reset" | "factory-reset"
+  >(null);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setListError(null);
@@ -84,12 +88,12 @@ export const ManageView = () => {
       const files = fd.getAll("files").filter((f) => f instanceof File);
       if (files.length === 0) return;
       const orientation = fd.get("orient");
-      const [dstW, dstH] =
-        orientation === "portrait" ? [240, 320] : [320, 240];
+      const [dstW, dstH] = orientation === "portrait" ? [240, 320] : [320, 240];
 
       setUploading(true);
       setUploadLog([]);
-      let ok = 0, fail = 0;
+      let ok = 0,
+        fail = 0;
       for (const file of files) {
         const stem = file.name.replace(/\.[^.]+$/, "");
         const target = `${stem}.bin`;
@@ -166,6 +170,9 @@ export const ManageView = () => {
               <li key={img.name}>
                 <span class="name">{img.name}</span>
                 <span class="muted">{(img.size / 1024).toFixed(1)} KB</span>
+                <button type="button" onClick={() => setViewingImage(img.name)}>
+                  View
+                </button>
                 <button type="button" onClick={() => onDelete(img.name)}>
                   Delete
                 </button>
@@ -276,6 +283,11 @@ export const ManageView = () => {
           </button>
         </p>
       </section>
+
+      <LvglBinViewer
+        fileName={viewingImage ?? ""}
+        onClose={() => setViewingImage(null)}
+      />
     </div>
   );
 };
