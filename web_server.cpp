@@ -14,9 +14,11 @@
 
 static AsyncWebServer server(80);
 static WebMode current_mode = MODE_SETUP;
-static bool restart_requested = false;
-static bool factory_reset_requested = false;
-static bool begin_called = false;
+// L1: written from AsyncTCP-task handlers, polled from the Arduino loop task.
+// `volatile` keeps the loop's reads honest (no register-caching).
+static volatile bool restart_requested = false;
+static volatile bool factory_reset_requested = false;
+static bool begin_called = false;  // touched only from loop task; no volatile.
 
 // 320x240 RGB565 + 12 B header = 153 612 B. 256 KB leaves headroom for a
 // slightly larger frame or alt format without letting a malformed client

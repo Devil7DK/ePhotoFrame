@@ -13,10 +13,13 @@ enum class PendingAction {
 };
 
 static PendingAction pending = PendingAction::NONE;
-static bool wifi_reset_requested = false;
-static bool factory_reset_requested = false;
-static bool restart_requested = false;
-static bool enter_manage_requested = false;
+// L1/L23: written on the LVGL task (event callbacks), polled on the Arduino
+// loop task. Aligned bool stores are atomic on Xtensa, but `volatile` is
+// required so the loop's reads aren't hoisted/cached in a register.
+static volatile bool wifi_reset_requested = false;
+static volatile bool factory_reset_requested = false;
+static volatile bool restart_requested = false;
+static volatile bool enter_manage_requested = false;
 
 static bool in_manage_mode = false;
 static bool in_photos_mode = false;
