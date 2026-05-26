@@ -91,11 +91,30 @@ function createLvglBin(imageData: ImageData) {
 
 export async function renderBin(binBlob: Blob, canvas: HTMLCanvasElement) {
   const buf = await binBlob.arrayBuffer();
+  if (buf.byteLength < 12) {
+    throw new Error("file too small to be an LVGL bin");
+  }
   const view = new DataView(buf);
 
-  // LVGL header
+  // LVGL header — written by createLvglBin above:
+  //   byte 0: magic 0x19
+  //   byte 1: color format 0x12 (LV_COLOR_FORMAT_RGB565)
+  //   bytes 4-5: width, 6-7: height
+  const magic = view.getUint8(0);
+  const cf = view.getUint8(1);
+  if (magic !== 0x19) {
+    throw new Error(`bad magic byte 0x${magic.toString(16)} (expected 0x19)`);
+  }
+  if (cf !== 0x12) {
+    throw new Error(`unsupported color format 0x${cf.toString(16)} (expected 0x12 RGB565)`);
+  }
+
   const width = view.getUint16(4, true);
   const height = view.getUint16(6, true);
+  const expected = 12 + width * height * 2;
+  if (buf.byteLength < expected) {
+    throw new Error(`truncated: ${buf.byteLength} bytes, expected at least ${expected} for ${width}x${height}`);
+  }
 
   canvas.width = width;
   canvas.height = height;

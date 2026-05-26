@@ -16,34 +16,67 @@ export const LvglBinViewer: FunctionalComponent<ILvglBinViewerProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [binBlob, setBinBlob] = useState<Blob | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     if (!fileName) {
       setBinBlob(null);
+      setError(null);
       setLoading(false);
       return;
     }
 
+    // Reset both blob and error on a new fileName so the [binBlob] effect
+    // can clear the canvas before the new image arrives.
+    setBinBlob(null);
+    setError(null);
     setLoading(true);
-    fetch(`/api/images/${fileName}`)
-      .then((response) => response.blob())
+
+    let cancelled = false;
+    fetch(`/api/images/${encodeURIComponent(fileName)}`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return response.blob();
+      })
       .then((blob) => {
+        if (cancelled) return;
+        // Don't clear loading here — keep the overlay up through renderBin
+        // so the user never sees the stale canvas peek through.
         setBinBlob(blob);
-        setLoading(false);
       })
       .catch((err) => {
+        if (cancelled) return;
         console.error("Failed to fetch bin file:", err);
-        setBinBlob(null);
+        setError(String((err as Error).message ?? err));
         setLoading(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [fileName]);
 
   useEffect(() => {
-    if (!binBlob || !canvasRef.current) return;
-
-    renderBin(binBlob, canvasRef.current);
+    if (!canvasRef.current) return;
+    if (!binBlob) {
+      // Clear stale content while a new fetch is in flight or on error.
+      const ctx = canvasRef.current.getContext("2d");
+      if (ctx) {
+        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      }
+      return;
+    }
+    renderBin(binBlob, canvasRef.current)
+      .then(() => setLoading(false))
+      .catch((err) => {
+        console.error("Failed to render bin file:", err);
+        setError(String((err as Error).message ?? err));
+        setLoading(false);
+      });
   }, [binBlob]);
 
   if (!fileName) {
@@ -57,10 +90,16 @@ export const LvglBinViewer: FunctionalComponent<ILvglBinViewerProps> = ({
           <div className="title-container">
             <h2>{fileName}</h2>
             <div className="flex-fill" />
-            <button onClick={onClose}>Close</button>
+            <button type="button" onClick={onClose}>
+              Close
+            </button>
           </div>
           <div className="canvas-container">
-            <canvas ref={canvasRef} />
+            {error ? (
+              <p class="error">Failed to load: {error}</p>
+            ) : (
+              <canvas ref={canvasRef} />
+            )}
           </div>
         </div>
       </div>
