@@ -151,6 +151,8 @@ void ui_show_photos() {
 
   photos_show_first();
 
+  if (photos_count() < 2) return;
+
   btn_prev = lv_button_create(lv_screen_active());
   lv_obj_set_size(btn_prev, 32, 32);
   lv_obj_align(btn_prev, LV_ALIGN_BOTTOM_LEFT, 5, -5);
