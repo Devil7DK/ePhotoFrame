@@ -4,7 +4,7 @@ import type { SubmitEventHandler } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 
 import { processFile } from "../../utils";
-import { LvglBinViewer } from "../../components";
+import { ConfirmDialog, LvglBinViewer } from "../../components";
 
 type ImageEntry = { name: string; size: number };
 
@@ -69,6 +69,13 @@ export const ManageView = () => {
     null | "restart" | "wifi-reset" | "factory-reset"
   >(null);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    confirmKind: "danger" | "warn";
+    onConfirm: () => void;
+  } | null>(null);
 
   const [autoplaySec, setAutoplaySec] = useState<string>("");
   const [autoplaySaving, setAutoplaySaving] = useState(false);
@@ -179,14 +186,12 @@ export const ManageView = () => {
     [log, refresh],
   );
 
-  const doAction = useCallback(
+  const runAction = useCallback(
     async (
       kind: "restart" | "wifi-reset" | "factory-reset",
       path: string,
-      confirmMsg: string,
       successMsg: string,
     ) => {
-      if (kind !== "restart" && !confirm(confirmMsg)) return;
       setBusyAction(kind);
       setActionMsg(null);
       try {
@@ -198,6 +203,31 @@ export const ManageView = () => {
       }
     },
     [],
+  );
+
+  const doAction = useCallback(
+    (
+      kind: "restart" | "wifi-reset" | "factory-reset",
+      path: string,
+      confirmMsg: string,
+      successMsg: string,
+    ) => {
+      if (kind === "restart") {
+        runAction(kind, path, successMsg);
+        return;
+      }
+      setPendingConfirm({
+        title: kind === "wifi-reset" ? "Reset WiFi?" : "Factory reset?",
+        message: confirmMsg,
+        confirmLabel: "Reset",
+        confirmKind: "danger",
+        onConfirm: () => {
+          setPendingConfirm(null);
+          runAction(kind, path, successMsg);
+        },
+      });
+    },
+    [runAction],
   );
 
   if (busyAction) {
@@ -390,6 +420,17 @@ export const ManageView = () => {
         fileName={viewingImage ?? ""}
         onClose={() => setViewingImage(null)}
       />
+
+      {pendingConfirm && (
+        <ConfirmDialog
+          title={pendingConfirm.title}
+          message={pendingConfirm.message}
+          confirmLabel={pendingConfirm.confirmLabel}
+          confirmKind={pendingConfirm.confirmKind}
+          onConfirm={pendingConfirm.onConfirm}
+          onCancel={() => setPendingConfirm(null)}
+        />
+      )}
     </div>
   );
 };

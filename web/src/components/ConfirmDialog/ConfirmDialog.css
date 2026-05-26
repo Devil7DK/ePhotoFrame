@@ -1,0 +1,44 @@
+div.confirm-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1100;
+  padding: 1rem;
+
+  > div.confirm-dialog {
+    width: 100%;
+    max-width: 24rem;
+    background: var(--surface);
+    color: var(--text);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+
+    > h2 {
+      margin: 0;
+    }
+
+    > p {
+      margin: 0;
+      color: var(--text-muted);
+    }
+
+    > .actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+      margin-top: 0.625rem;
+
+      > button {
+        min-width: 6rem;
+      }
+    }
+  }
+}

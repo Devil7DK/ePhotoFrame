@@ -10,6 +10,8 @@ enum class PendingAction {
   SHOW_PHOTOS,
   SHOW_SETTINGS_MENU,
   ENTER_MANAGE_MODE,
+  CONFIRM_WIFI_RESET,
+  CONFIRM_FACTORY_RESET,
 };
 
 static PendingAction pending = PendingAction::NONE;
@@ -56,13 +58,22 @@ static void on_back_clicked(lv_event_t *) {
   pending = PendingAction::SHOW_PHOTOS;
 }
 static void on_wifi_reset_clicked(lv_event_t *) {
-  wifi_reset_requested = true;
+  pending = PendingAction::CONFIRM_WIFI_RESET;
 }
 static void on_factory_reset_clicked(lv_event_t *) {
-  factory_reset_requested = true;
+  pending = PendingAction::CONFIRM_FACTORY_RESET;
 }
 static void on_restart_clicked(lv_event_t *) {
   restart_requested = true;
+}
+static void on_confirm_cancel(lv_event_t *) {
+  pending = PendingAction::SHOW_SETTINGS_MENU;
+}
+static void on_confirm_wifi_reset_yes(lv_event_t *) {
+  wifi_reset_requested = true;
+}
+static void on_confirm_factory_reset_yes(lv_event_t *) {
+  factory_reset_requested = true;
 }
 
 // ---------- screen helpers ---------------------------------------------------
@@ -108,6 +119,43 @@ static void make_menu_button(lv_obj_t *parent, const char *label, lv_event_cb_t 
   lv_label_set_text(lbl, label);
   lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
   lv_obj_center(lbl);
+}
+
+static void show_confirm_screen(const char *title, const char *body,
+                                lv_event_cb_t yes_cb, const char *yes_label) {
+  reset_screen();
+  lv_obj_t *bg = make_dark_bg();
+  add_white_title(bg, title);
+
+  lv_obj_t *msg = lv_label_create(bg);
+  lv_label_set_text(msg, body);
+  lv_label_set_long_mode(msg, LV_LABEL_LONG_WRAP);
+  lv_obj_set_width(msg, 290);
+  lv_obj_set_style_text_color(msg, lv_color_white(), 0);
+  lv_obj_set_style_text_font(msg, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_align(msg, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(msg, LV_ALIGN_CENTER, 0, 0);
+
+  lv_obj_t *cancel_btn = lv_button_create(bg);
+  lv_obj_set_size(cancel_btn, 130, 36);
+  lv_obj_align(cancel_btn, LV_ALIGN_BOTTOM_LEFT, 0, -5);
+  lv_obj_add_event_cb(cancel_btn, on_confirm_cancel, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *cancel_lbl = lv_label_create(cancel_btn);
+  lv_label_set_text(cancel_lbl, "Cancel");
+  lv_obj_set_style_text_font(cancel_lbl, &lv_font_montserrat_14, 0);
+  lv_obj_center(cancel_lbl);
+
+  lv_obj_t *yes_btn = lv_button_create(bg);
+  lv_obj_set_size(yes_btn, 130, 36);
+  lv_obj_align(yes_btn, LV_ALIGN_BOTTOM_RIGHT, 0, -5);
+  // Danger-colored — matches the destructive action.
+  lv_obj_set_style_bg_color(yes_btn, lv_color_hex(0xc0392b), 0);
+  lv_obj_add_event_cb(yes_btn, yes_cb, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *yes_lbl = lv_label_create(yes_btn);
+  lv_label_set_text(yes_lbl, yes_label);
+  lv_obj_set_style_text_color(yes_lbl, lv_color_white(), 0);
+  lv_obj_set_style_text_font(yes_lbl, &lv_font_montserrat_14, 0);
+  lv_obj_center(yes_lbl);
 }
 
 // ---------- screens ---------------------------------------------------------
@@ -287,6 +335,16 @@ void ui_update() {
       // hundreds of ms. Do them on the loop task instead so this task can
       // keep refreshing LVGL.
       enter_manage_requested = true;
+      break;
+    case PendingAction::CONFIRM_WIFI_RESET:
+      show_confirm_screen("Reset WiFi?",
+                          "Clear saved WiFi\ncredentials and restart\nin setup mode?",
+                          on_confirm_wifi_reset_yes, "Reset");
+      break;
+    case PendingAction::CONFIRM_FACTORY_RESET:
+      show_confirm_screen("Factory Reset?",
+                          "Wipe all device settings\nand restart? Images on\nSD are kept.",
+                          on_confirm_factory_reset_yes, "Reset");
       break;
     default:
       break;
