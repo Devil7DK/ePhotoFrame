@@ -113,13 +113,6 @@ div.manage-view {
       color: var(--text-muted);
     }
 
-    > p.orientation {
-      display: flex;
-      gap: 0.875rem;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-
     > .drop-zone {
       display: flex;
       flex-direction: column;

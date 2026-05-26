@@ -129,6 +129,8 @@ const QueuePreview: FunctionalComponent<{
   return <canvas class="preview" ref={canvasRef} />;
 };
 
+const orientation: Orientation = "landscape";
+
 export const ManageView = () => {
   const [images, setImages] = useState<ImageEntry[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -146,7 +148,6 @@ export const ManageView = () => {
   } | null>(null);
 
   const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [orientation, setOrientation] = useState<Orientation>("landscape");
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -186,22 +187,6 @@ export const ManageView = () => {
       queueRef.current.forEach((it) => URL.revokeObjectURL(it.sourceUrl));
     };
   }, []);
-
-  // Orientation flip → re-derive default crops. Any per-image edits get
-  // dropped on purpose: a portrait crop is meaningless once the target is
-  // landscape. Also close any open editor — its aspectRatio is now wrong.
-  useEffect(() => {
-    const [dstW, dstH] = orientationDims(orientation);
-    setQueue((prev) =>
-      prev.map((it) => ({
-        ...it,
-        crop: calculateCropFill(it.width, it.height, dstW, dstH),
-        status: "pending",
-        error: undefined,
-      })),
-    );
-    setEditingId(null);
-  }, [orientation]);
 
   const onSaveAutoplay: SubmitEventHandler<HTMLFormElement> = useCallback(
     async (e) => {
@@ -476,32 +461,6 @@ export const ManageView = () => {
           before upload — the device only stores the bytes.
         </p>
 
-        <p class="orientation">
-          Orientation:{" "}
-          <label>
-            <input
-              type="radio"
-              name="orient"
-              value="landscape"
-              checked={orientation === "landscape"}
-              onChange={() => setOrientation("landscape")}
-              disabled={uploading}
-            />{" "}
-            Landscape 320×240
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="orient"
-              value="portrait"
-              checked={orientation === "portrait"}
-              onChange={() => setOrientation("portrait")}
-              disabled={uploading}
-            />{" "}
-            Portrait 240×320
-          </label>
-        </p>
-
         <label
           class={"drop-zone" + (dragOver ? " drag-over" : "")}
           onDragOver={onDragOver}
@@ -518,7 +477,8 @@ export const ManageView = () => {
           />
           <strong>Drop images here or click to select</strong>
           <span class="muted">
-            Changing orientation while items are queued resets their crops.
+            Cropped to {dstW}×{dstH} landscape. Use Edit on a card to adjust the
+            crop area.
           </span>
         </label>
 
@@ -536,9 +496,7 @@ export const ManageView = () => {
                     {item.status === "uploading" && (
                       <div class="muted">Uploading…</div>
                     )}
-                    {item.status === "done" && (
-                      <div class="ok">Uploaded ✓</div>
-                    )}
+                    {item.status === "done" && <div class="ok">Uploaded ✓</div>}
                     {item.status === "error" && (
                       <div class="error" title={item.error}>
                         {item.error ?? "Failed"}
