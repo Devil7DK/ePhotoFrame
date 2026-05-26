@@ -65,7 +65,7 @@ function mockAPIs(): Plugin {
   const state = {
     ssid: MODE === "manage" ? "HomeWiFi" : "",
     password: MODE === "manage" ? "secret123" : "",
-    autoplay_ms: 0,
+    autoplay_ms: 3600000,
   };
 
   const FAKE_NETWORKS = [

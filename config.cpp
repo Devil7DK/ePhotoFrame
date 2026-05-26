@@ -10,7 +10,8 @@
 struct Config {
   char ssid[33] = "";
   char password[65] = "";
-  uint32_t autoplay_ms = 0;
+  // 1 hour default — a fresh-flashed device should cycle photos out of the box.
+  uint32_t autoplay_ms = 3600000;
 };
 
 static Config cfg;
@@ -38,7 +39,7 @@ bool config_load() {
   const char* pwd = doc["wifi"]["password"] | "";
   strlcpy(cfg.ssid, ssid, sizeof(cfg.ssid));
   strlcpy(cfg.password, pwd, sizeof(cfg.password));
-  cfg.autoplay_ms = doc["autoplay_ms"] | 0;
+  cfg.autoplay_ms = doc["autoplay_ms"] | 3600000;
 
   Serial.print("[OK] Config loaded; wifi=");
   Serial.println(cfg.ssid[0] ? cfg.ssid : "(none)");

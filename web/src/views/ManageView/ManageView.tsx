@@ -30,6 +30,22 @@ function orientationDims(o: Orientation): [number, number] {
   return o === "portrait" ? [240, 320] : [320, 240];
 }
 
+function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "";
+  if (seconds === 0) return "off";
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? "" : "s"}`;
+  if (seconds < 3600) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    if (s === 0) return `${m} minute${m === 1 ? "" : "s"}`;
+    return `${m}m ${s}s`;
+  }
+  const h = Math.floor(seconds / 3600);
+  const remMin = Math.floor((seconds % 3600) / 60);
+  if (remMin === 0) return `${h} hour${h === 1 ? "" : "s"}`;
+  return `${h}h ${remMin}m`;
+}
+
 async function fetchImages(): Promise<ImageEntry[]> {
   const r = await fetch("/api/images");
   if (!r.ok) throw new Error(`list failed: HTTP ${r.status}`);
@@ -173,7 +189,7 @@ export const ManageView = () => {
 
   useEffect(() => {
     fetchConfig()
-      .then((cfg) => setAutoplaySec(String((cfg.autoplay_ms ?? 0) / 1000)))
+      .then((cfg) => setAutoplaySec(String((cfg.autoplay_ms ?? 3600000) / 1000)))
       .catch((e) => setAutoplayMsg(`Failed to load: ${e}`));
   }, []);
 
@@ -566,6 +582,13 @@ export const ManageView = () => {
                 disabled={autoplaySaving}
               />
             </label>
+            {(() => {
+              if (autoplaySec.trim() === "") return null;
+              const pretty = formatDuration(Number(autoplaySec));
+              return pretty ? (
+                <span class="muted duration-hint">→ {pretty}</span>
+              ) : null;
+            })()}
           </p>
           <p>
             <button type="submit" disabled={autoplaySaving}>
