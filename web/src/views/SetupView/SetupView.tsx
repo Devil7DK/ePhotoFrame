@@ -1,3 +1,5 @@
+import "./SetupView.css";
+
 import type { SubmitEventHandler } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 
@@ -77,7 +79,7 @@ export const SetupView = () => {
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form class="setup-view" onSubmit={onSubmit}>
       <h1>ePhotoFrame Setup</h1>
 
       <div class="networks">

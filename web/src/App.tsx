@@ -2,8 +2,7 @@ import "./App.css";
 
 import { useEffect, useState } from "preact/hooks";
 
-import { ManageView } from "./ManageView";
-import { SetupView } from "./SetupView";
+import { ManageView, SetupView } from "./views";
 
 type Mode = "setup" | "manage";
 

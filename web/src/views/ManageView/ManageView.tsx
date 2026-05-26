@@ -1,8 +1,10 @@
+import "./ManageView.css";
+
 import type { SubmitEventHandler } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 
-import { processFile } from "./utils";
-import { LvglBinViewer } from "./components";
+import { processFile } from "../../utils";
+import { LvglBinViewer } from "../../components";
 
 type ImageEntry = { name: string; size: number };
 
@@ -111,7 +113,9 @@ export const ManageView = () => {
       setAutoplayMsg(null);
       try {
         await postAutoplay(Math.round(seconds * 1000));
-        setAutoplayMsg(seconds === 0 ? "Autoplay disabled." : `Autoplay set to ${seconds}s.`);
+        setAutoplayMsg(
+          seconds === 0 ? "Autoplay disabled." : `Autoplay set to ${seconds}s.`,
+        );
       } catch (err) {
         setAutoplayMsg(String((err as Error).message ?? err));
       } finally {
@@ -207,7 +211,7 @@ export const ManageView = () => {
   }
 
   return (
-    <div class="manage">
+    <div class="manage-view">
       <h1>ePhotoFrame</h1>
 
       <section class="gallery">
@@ -320,8 +324,9 @@ export const ManageView = () => {
             </button>
             {autoplayMsg && (
               <span
-                class={autoplayMsg.startsWith("Autoplay") ? "muted" : "error"}
-                style="margin-left: 0.5em"
+                class={`autoplay-status ${
+                  autoplayMsg.startsWith("Autoplay") ? "muted" : "error"
+                }`}
               >
                 {autoplayMsg}
               </span>
