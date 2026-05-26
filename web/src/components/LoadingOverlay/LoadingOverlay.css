@@ -1,11 +1,37 @@
 div.loading-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
-
-  background-color: rgba(0, 0, 0, 0.5);
-
+  background-color: rgba(15, 23, 42, 0.45);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 9999;
+
+  > .text {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.7rem 1.25rem;
+    background: var(--surface);
+    color: var(--text);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+    font-weight: 500;
+
+    &::before {
+      content: "";
+      width: 1em;
+      height: 1em;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: loading-spin 0.8s linear infinite;
+    }
+  }
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

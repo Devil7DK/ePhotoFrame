@@ -1,79 +1,154 @@
 div.manage-view {
-  padding: 1em;
+  width: 100%;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 
-  h1 {
-    margin-top: 0;
+  > h1 {
+    margin: 0;
   }
 
-  h2 {
-    margin-top: 1.5em;
-    margin-bottom: 0.5em;
-    font-size: 1.1em;
-  }
+  > section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 1rem 1.25rem;
 
-  pre {
-    background: #f4f4f4;
-    padding: 0.5em;
-    font-size: 0.85em;
-    white-space: pre-wrap;
-    word-break: break-all;
-  }
+    > h2 {
+      margin: 0 0 0.375rem;
+    }
 
-  code {
-    background: #f4f4f4;
-    padding: 0 0.25em;
-    border-radius: 2px;
-    font-size: 0.95em;
+    > p {
+      margin: 0 0 0.875rem;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
   }
 
   .gallery {
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    margin-bottom: 1em;
+    padding: 0;
+    overflow: hidden;
 
-    header {
+    > header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 0.5em;
-      border-bottom: 1px solid #ccc;
+      gap: 0.5rem;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+
+      > strong {
+        font-size: 0.95rem;
+      }
+
+      > button {
+        min-height: 2rem;
+        padding: 0.375rem 0.875rem;
+        font-size: 0.875rem;
+      }
     }
 
-    ul {
+    > .muted,
+    > .error {
+      margin: 0;
+      padding: 1rem;
+    }
+
+    > ul {
       list-style: none;
       margin: 0;
       padding: 0;
     }
 
-    li {
+    > ul > li {
       display: grid;
       grid-template-columns: 1fr auto auto auto;
-      gap: 0.5em;
+      gap: 0.5rem;
       align-items: center;
-      padding: 0.5em;
-      border-bottom: 1px solid #eee;
+      padding: 0.7rem 1rem;
+      border-bottom: 1px solid var(--border);
 
       &:last-child {
         border-bottom: none;
       }
 
-      .name {
+      > .name {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        font-weight: 500;
+      }
+
+      > .muted {
+        flex: 0 0 auto;
+        font-size: 0.85rem;
+      }
+
+      > button {
+        flex: 0 0 auto;
+        min-height: 2rem;
+        padding: 0.375rem 0.75rem;
+        font-size: 0.85rem;
       }
     }
   }
 
-  .upload form {
-    padding: 0;
+  .upload {
+    label {
+      margin-right: 0.875rem;
+
+      &:last-child {
+        margin-right: 0;
+      }
+    }
+
+    pre {
+      margin-top: 0.875rem;
+      max-height: 12rem;
+      overflow-y: auto;
+    }
   }
 
-  .autoplay .autoplay-status {
-    margin-left: 0.5em;
+  .autoplay {
+    .autoplay-status {
+      margin-left: 0.75rem;
+      font-size: 0.9rem;
+    }
   }
 
-  .actions p {
-    margin: 0.4em 0;
+  .actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+
+    > p {
+      margin: 0;
+    }
+
+    > p > button {
+      width: 100%;
+    }
+  }
+}
+
+@media (min-width: 32rem) {
+  div.manage-view .actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+
+    > p {
+      flex: 1 1 0;
+      min-width: 9rem;
+    }
+
+    > p > button {
+      width: 100%;
+    }
   }
 }
