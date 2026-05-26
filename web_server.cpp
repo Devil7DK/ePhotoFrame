@@ -18,6 +18,11 @@ static bool restart_requested = false;
 static bool factory_reset_requested = false;
 static bool begin_called = false;
 
+// 320x240 RGB565 + 12 B header = 153 612 B. 256 KB leaves headroom for a
+// slightly larger frame or alt format without letting a malformed client
+// stream forever and fill the SD.
+static constexpr size_t MAX_UPLOAD_BYTES = 256 * 1024;
+
 static void send_html(AsyncWebServerRequest *req) {
   // L14: HTML_DATA is gzip-compressed by the vite plugin.
   AsyncWebServerResponse *resp = req->beginResponse_P(
@@ -301,6 +306,10 @@ static void register_routes() {
         req->send(403, "application/json", "{\"error\":\"manage mode only\"}");
         return;
       }
+      if (req->contentLength() > MAX_UPLOAD_BYTES) {
+        req->send(413, "application/json", "{\"error\":\"file too large (max 256 KB)\"}");
+        return;
+      }
       if (req->_tempFile) {
         req->_tempFile.close();
         storage_sd_unlock();
@@ -312,10 +321,16 @@ static void register_routes() {
     nullptr,  // onUpload — not multipart
     // onBody: per-chunk raw body
     [is_safe_name](AsyncWebServerRequest *req, uint8_t *data, size_t len,
-                   size_t index, size_t /*total*/) {
+                   size_t index, size_t total) {
       if (current_mode != MODE_MANAGE) return;
       if (index == 0) {
-        // First chunk — validate name and open file
+        // First chunk — validate name, size and open file
+        if (total > MAX_UPLOAD_BYTES) {
+          Serial.print("[WARN] upload: too large (");
+          Serial.print(total);
+          Serial.println(" B)");
+          return;
+        }
         if (!req->hasParam("name")) {
           Serial.println("[WARN] upload: missing name param");
           return;

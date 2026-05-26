@@ -225,6 +225,10 @@ function mockAPIs(): Plugin {
           if (!name.endsWith(".bin") || name.includes("/") || name.includes("..")) {
             return json(res, 400, { error: "bad name" });
           }
+          const declared = Number(req.headers["content-length"] ?? "0");
+          if (declared > 256 * 1024) {
+            return json(res, 413, { error: "file too large (max 256 KB)" });
+          }
           let received = 0;
           req.on("data", (chunk) => (received += chunk.length));
           await new Promise((r) => req.on("end", r));
