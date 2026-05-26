@@ -26,7 +26,9 @@ static volatile bool enter_manage_requested = false;
 static bool in_manage_mode = false;
 static bool in_photos_mode = false;
 static lv_obj_t *manage_status_label = nullptr;
+static lv_obj_t *manage_info_label = nullptr;
 static WifiStatus last_wifi_status_shown = WIFI_ST_DISCONNECTED;
+static String last_ip_shown = "";
 
 // Photos-screen button auto-hide. After this many ms with no touch input the
 // settings/prev/next buttons fade out of the way so the photo isn't obscured.
@@ -82,6 +84,8 @@ static void reset_screen() {
   in_manage_mode = false;
   in_photos_mode = false;
   manage_status_label = nullptr;
+  manage_info_label = nullptr;
+  last_ip_shown = "";
   btn_settings = nullptr;
   btn_prev = nullptr;
   btn_next = nullptr;
@@ -233,24 +237,37 @@ void ui_show_settings_menu() {
   make_menu_button(bg, "Back", on_back_clicked, 156);
 }
 
+static String build_manage_info_text(const String &ip) {
+  String text = String("Connect to WiFi:\n") + config_get_ssid() +
+                "\n\nOpen in browser:\nhttp://ephotoframe.local";
+  if (ip.length() > 0) {
+    text += "\nhttp://";
+    text += ip;
+  }
+  return text;
+}
+
 void ui_show_manage_mode() {
   reset_screen();
   in_manage_mode = true;
   last_wifi_status_shown = WIFI_ST_DISCONNECTED;
+  last_ip_shown = wifi_ip();
 
   lv_obj_t *bg = make_dark_bg();
   add_white_title(bg, "Manage Mode");
 
-  // WiFi SSID + mDNS hostname — static text, painted once on entry.
-  lv_obj_t *info = lv_label_create(bg);
-  String text = String("Connect to WiFi:\n") + config_get_ssid() + "\n\nOpen in browser:\nhttp://ephotoframe.local";
-  lv_label_set_text(info, text.c_str());
-  lv_obj_set_style_text_color(info, lv_color_white(), 0);
-  lv_obj_set_style_text_font(info, &lv_font_montserrat_14, 0);
-  lv_obj_set_style_text_align(info, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_width(info, 290);
-  lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
-  lv_obj_align(info, LV_ALIGN_TOP_MID, 0, 25);
+  // WiFi SSID + mDNS hostname + (once STA is up) IP. The IP line gets
+  // appended/refreshed by update_manage_status_if_changed() as WiFi state
+  // flips.
+  manage_info_label = lv_label_create(bg);
+  lv_label_set_text(manage_info_label,
+                    build_manage_info_text(last_ip_shown).c_str());
+  lv_obj_set_style_text_color(manage_info_label, lv_color_white(), 0);
+  lv_obj_set_style_text_font(manage_info_label, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_align(manage_info_label, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_width(manage_info_label, 290);
+  lv_label_set_long_mode(manage_info_label, LV_LABEL_LONG_WRAP);
+  lv_obj_align(manage_info_label, LV_ALIGN_TOP_MID, 0, 25);
 
   // Status indicator, updated by update_manage_status_if_changed.
   manage_status_label = lv_label_create(bg);
@@ -283,16 +300,27 @@ void ui_show_manage_mode() {
 // ---------- per-tick update -------------------------------------------------
 
 static void update_manage_status_if_changed() {
-  if (!in_manage_mode || !manage_status_label) return;
+  if (!in_manage_mode) return;
+
   WifiStatus s = wifi_status();
-  if (s == last_wifi_status_shown) return;
-  last_wifi_status_shown = s;
+  if (s != last_wifi_status_shown && manage_status_label) {
+    last_wifi_status_shown = s;
+    const char *txt = "Status: connecting...";
+    if (s == WIFI_ST_CONNECTED) txt = "Status: connected";
+    else if (s == WIFI_ST_FAILED) txt = "Status: failed";
+    lv_label_set_text(manage_status_label, txt);
+  }
 
-  const char *txt = "Status: connecting...";
-  if (s == WIFI_ST_CONNECTED) txt = "Status: connected";
-  else if (s == WIFI_ST_FAILED) txt = "Status: failed";
-
-  lv_label_set_text(manage_status_label, txt);
+  // Refresh the IP line independently — DHCP may issue a lease after the
+  // CONNECTED transition, and on disconnect the IP should disappear.
+  if (manage_info_label) {
+    String ip = wifi_ip();
+    if (ip != last_ip_shown) {
+      last_ip_shown = ip;
+      lv_label_set_text(manage_info_label,
+                        build_manage_info_text(ip).c_str());
+    }
+  }
 }
 
 static void update_photo_buttons_visibility() {
