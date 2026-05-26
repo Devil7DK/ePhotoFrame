@@ -26,6 +26,15 @@ static bool in_photos_mode = false;
 static lv_obj_t *manage_status_label = nullptr;
 static WifiStatus last_wifi_status_shown = WIFI_ST_DISCONNECTED;
 
+// Photos-screen button auto-hide. After this many ms with no touch input the
+// settings/prev/next buttons fade out of the way so the photo isn't obscured.
+// Any touch (including taps on the now-hidden button area) resets the timer.
+static constexpr uint32_t PHOTO_BUTTONS_HIDE_MS = 5000;
+static lv_obj_t *btn_settings = nullptr;
+static lv_obj_t *btn_prev = nullptr;
+static lv_obj_t *btn_next = nullptr;
+static bool buttons_hidden = false;
+
 // ---------- per-button click handlers (no global-pointer compare) -----------
 // L23: LVGL runs on its own task, so events fire there and we can call
 // LVGL-mutating helpers (photos_show_*, ui_show_*) directly without the old
@@ -62,6 +71,10 @@ static void reset_screen() {
   in_manage_mode = false;
   in_photos_mode = false;
   manage_status_label = nullptr;
+  btn_settings = nullptr;
+  btn_prev = nullptr;
+  btn_next = nullptr;
+  buttons_hidden = false;
   lv_obj_clean(lv_screen_active());
   photos_reset();
 }
@@ -117,8 +130,11 @@ void ui_show_setup_screen() {
 void ui_show_photos() {
   reset_screen();
   in_photos_mode = true;
+  // Start the auto-hide window fresh — without this, if the user took >5 s in
+  // the settings menu the buttons would hide on the very next ui_update tick.
+  lv_display_trigger_activity(NULL);
 
-  lv_obj_t *btn_settings = lv_button_create(lv_screen_active());
+  btn_settings = lv_button_create(lv_screen_active());
   lv_obj_set_size(btn_settings, 32, 32);
   lv_obj_align(btn_settings, LV_ALIGN_BOTTOM_MID, 0, -5);
   lv_obj_add_event_cb(btn_settings, on_settings_clicked, LV_EVENT_CLICKED, NULL);
@@ -135,7 +151,7 @@ void ui_show_photos() {
 
   photos_show_first();
 
-  lv_obj_t *btn_prev = lv_button_create(lv_screen_active());
+  btn_prev = lv_button_create(lv_screen_active());
   lv_obj_set_size(btn_prev, 32, 32);
   lv_obj_align(btn_prev, LV_ALIGN_BOTTOM_LEFT, 5, -5);
   lv_obj_add_event_cb(btn_prev, on_prev_clicked, LV_EVENT_CLICKED, NULL);
@@ -143,7 +159,7 @@ void ui_show_photos() {
   lv_image_set_src(prev_img, "S:/previous.png");
   lv_obj_center(prev_img);
 
-  lv_obj_t *btn_next = lv_button_create(lv_screen_active());
+  btn_next = lv_button_create(lv_screen_active());
   lv_obj_set_size(btn_next, 32, 32);
   lv_obj_align(btn_next, LV_ALIGN_BOTTOM_RIGHT, -5, -5);
   lv_obj_add_event_cb(btn_next, on_next_clicked, LV_EVENT_CLICKED, NULL);
@@ -225,8 +241,27 @@ static void update_manage_status_if_changed() {
   lv_label_set_text(manage_status_label, txt);
 }
 
+static void update_photo_buttons_visibility() {
+  if (!in_photos_mode) return;
+  // btn_settings is the only button guaranteed to exist (the prev/next buttons
+  // are skipped when photos_count() == 0). Use it as the "screen built" gate.
+  if (!btn_settings) return;
+  bool want_hidden = lv_display_get_inactive_time(NULL) > PHOTO_BUTTONS_HIDE_MS;
+  if (want_hidden == buttons_hidden) return;
+  buttons_hidden = want_hidden;
+  auto apply = [want_hidden](lv_obj_t *obj) {
+    if (!obj) return;
+    if (want_hidden) lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_clear_flag(obj, LV_OBJ_FLAG_HIDDEN);
+  };
+  apply(btn_settings);
+  apply(btn_prev);
+  apply(btn_next);
+}
+
 void ui_update() {
   update_manage_status_if_changed();
+  update_photo_buttons_visibility();
   if (in_photos_mode) photos_update();
 
   if (pending == PendingAction::NONE) return;
