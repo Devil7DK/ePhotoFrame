@@ -13,7 +13,10 @@ static String ap_ssid;
 static String ap_password;
 static String scan_results_json = "{\"networks\":[],\"count\":0}";
 static bool scan_in_progress = false;
-static bool restart_requested = false;
+// True once wifi_start_sta() or wifi_start_ap() has been called. Until then,
+// wifi_update() must NOT touch the radio — photo-frame mode boots without
+// WiFi and only starts it when the user enters manage mode.
+static bool started = false;
 
 static void derive_ap_creds() {
   uint8_t mac[6] = { 0 };
@@ -48,6 +51,7 @@ void wifi_start_sta() {
   WiFi.begin(config_get_ssid(), config_get_password());
   state = WIFI_ST_CONNECTING;
   last_attempt = millis();
+  started = true;
 }
 
 void wifi_start_ap() {
@@ -66,6 +70,7 @@ void wifi_start_ap() {
   Serial.print(" @ ");
   Serial.println(ip);
   state = WIFI_ST_AP_MODE;
+  started = true;
 }
 
 static void poll_scan() {
@@ -113,6 +118,8 @@ void wifi_scan_async() {
 }
 
 void wifi_update() {
+  if (!started) return;  // photo-frame mode keeps the radio off entirely
+
   poll_scan();
 
   switch (state) {
@@ -182,11 +189,4 @@ int32_t wifi_rssi() {
 
 const char* wifi_scan_results_json() {
   return scan_results_json.c_str();
-}
-
-bool wifi_restart_requested() {
-  return restart_requested;
-}
-void wifi_request_restart() {
-  restart_requested = true;
 }

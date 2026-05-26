@@ -6,11 +6,14 @@
 #include <ESPAsyncWebServer.h>
 #include <AsyncJson.h>
 #include <ArduinoJson.h>
+#include <ESPmDNS.h>
+#include <WiFi.h>
 
 static AsyncWebServer server(80);
 static WebMode current_mode = MODE_SETUP;
 static bool restart_requested = false;
 static bool factory_reset_requested = false;
+static bool begin_called = false;
 
 static void send_html(AsyncWebServerRequest *req) {
   // L14: HTML_DATA is gzip-compressed by the vite plugin.
@@ -103,18 +106,41 @@ static void register_routes() {
     });
   configPost->setMethod(HTTP_POST);
   server.addHandler(configPost);
+
+  server.on("/api/restart", HTTP_POST, [](AsyncWebServerRequest *req) {
+    req->send(200, "application/json", "{\"ok\":true,\"restarting\":true}");
+    restart_requested = true;  // L5
+  });
+}
+
+static bool mdns_started = false;
+
+static void start_mdns_when_connected() {
+  if (mdns_started) return;
+  if (wifi_status() != WIFI_ST_CONNECTED) return;
+  if (MDNS.begin("ephotoframe")) {
+    MDNS.addService("http", "tcp", 80);
+    Serial.println("[OK] mDNS: ephotoframe.local");
+    mdns_started = true;
+  } else {
+    Serial.println("[WARN] mDNS begin failed");
+  }
 }
 
 void web_server_begin(WebMode mode) {
   current_mode = mode;
   register_routes();
   server.begin();
+  begin_called = true;
   Serial.print("[OK] Web server started in ");
   Serial.println(mode == MODE_SETUP ? "SETUP mode" : "MANAGE mode");
 }
 
 void web_server_update() {
-  // Phase 2: no pending flags yet. Phase 4+ will apply navigate/rescan here.
+  if (!begin_called) return;
+  // mDNS can only register once an IP is bound, which is some ticks after
+  // wifi_start_sta() returns. Poll until ready.
+  start_mdns_when_connected();
 }
 
 bool web_server_restart_requested() {

@@ -17,9 +17,15 @@ static void show_at(int idx) {
   Serial.print("[INFO] Loading photo: ");
   Serial.println(photo_paths[idx].c_str());
 
-  if (img_obj)
-    lv_obj_del(img_obj);
-  img_obj = lv_image_create(lv_screen_active());
+  // Reuse a single image widget across navigations. Delete + recreate causes
+  // a visible white flash between the old image being destroyed and the new
+  // one decoded (SD read ~150 ms for 153 KB).
+  if (!img_obj) {
+    img_obj = lv_image_create(lv_screen_active());
+    lv_obj_move_background(img_obj);
+    lv_obj_clear_flag(img_obj, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(img_obj, LV_OBJ_FLAG_SCROLLABLE);
+  }
   if (!storage_sd_lock()) {
     Serial.println("[WARN] SD busy, skipping image load");
     return;
@@ -27,9 +33,10 @@ static void show_at(int idx) {
   lv_image_set_src(img_obj, photo_paths[idx].c_str());
   storage_sd_unlock();
   lv_obj_center(img_obj);
-  lv_obj_move_background(img_obj);
-  lv_obj_clear_flag(img_obj, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_clear_flag(img_obj, LV_OBJ_FLAG_SCROLLABLE);
+}
+
+void photos_reset() {
+  img_obj = nullptr;
 }
 
 void photos_scan() {

@@ -9,6 +9,11 @@
 #include "wifi_manager.h"
 #include "web_server.h"
 
+// L21: default 8 KB Arduino-ESP32 loop stack overflows when an LVGL event
+// callback chains into lv_refr_now() → full refresh → image decode → SD read.
+// 16 KB clears it with ~8 KB headroom.
+SET_LOOP_TASK_STACK_SIZE(16 * 1024);
+
 void setup() {
   Serial.begin(115200);
   delay(5000);
@@ -27,9 +32,9 @@ void setup() {
     web_server_begin(MODE_SETUP);
   } else {
     photos_scan();
-    ui_create();
-    wifi_start_sta();
-    web_server_begin(MODE_MANAGE);
+    ui_show_photos();
+    // Photo-frame mode runs WITHOUT WiFi / web server — they're started
+    // on demand when the user enters manage mode from the settings menu.
   }
 }
 
@@ -38,8 +43,9 @@ void loop() {
   wifi_update();
   web_server_update();
   config_commit_pending();
+  ui_update();
 
-  if (web_server_factory_reset_requested()) {
+  if (ui_factory_reset_requested() || web_server_factory_reset_requested()) {
     Serial.println("[INFO] Factory reset");
     config_factory_reset();
     WiFi.disconnect(true);
@@ -48,7 +54,15 @@ void loop() {
     ESP.restart();
   }
 
-  if (web_server_restart_requested() || wifi_restart_requested()) {
+  if (ui_wifi_reset_requested()) {
+    Serial.println("[INFO] WiFi reset");
+    config_clear_wifi();
+    config_commit_pending(true);
+    delay(100);
+    ESP.restart();
+  }
+
+  if (web_server_restart_requested()) {
     Serial.println("[INFO] Restart requested");
     config_commit_pending(true);
     delay(100);

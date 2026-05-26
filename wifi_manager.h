@@ -24,6 +24,3 @@ int32_t wifi_rssi();
 
 void wifi_scan_async();
 const char* wifi_scan_results_json();
-
-bool wifi_restart_requested();
-void wifi_request_restart();
