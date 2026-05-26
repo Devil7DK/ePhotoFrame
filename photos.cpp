@@ -51,11 +51,11 @@ void photos_update() {
 }
 
 void photos_scan() {
-  photo_count = 0;
   if (!storage_sd_lock()) {
     Serial.println("[WARN] SD busy, skipping photo scan");
-    return;
+    return;  // keep previous list intact rather than emptying it
   }
+  photo_count = 0;
   File root = SD.open(IMAGE_FOLDER);
   if (!root || !root.isDirectory()) {
     Serial.println("[WARN] SD image folder not found");

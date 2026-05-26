@@ -130,6 +130,10 @@ void ui_show_setup_screen() {
 void ui_show_photos() {
   reset_screen();
   in_photos_mode = true;
+  // Rescan in case the user just deleted/uploaded via manage mode. Without
+  // this, photo_paths[] keeps stale entries and current_index can land on a
+  // deleted file (visible as a white screen).
+  photos_scan();
   // Start the auto-hide window fresh — without this, if the user took >5 s in
   // the settings menu the buttons would hide on the very next ui_update tick.
   lv_display_trigger_activity(NULL);
