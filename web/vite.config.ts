@@ -75,6 +75,15 @@ function mockAPIs(): Plugin {
     { ssid: "Cafe-Free", rssi: -88, encryption: 0 },
   ];
 
+  // Simulated image library — name → byte count. Bytes themselves are
+  // generated on demand for downloads (we don't need to track real content
+  // for the dev loop; just plausible sizes).
+  const images: Map<string, number> = new Map([
+    ["sample1.bin", 153612],
+    ["sample2.bin", 153612],
+    ["sunset.bin", 153612],
+  ]);
+
   function json(
     res: import("http").ServerResponse,
     status: number,
@@ -159,6 +168,71 @@ function mockAPIs(): Plugin {
           state.ssid = ssid;
           state.password = password;
           return json(res, 200, { ok: true, restarting: true });
+        }
+
+        if (p === "/api/restart" && req.method === "POST") {
+          await delay(200);
+          return json(res, 200, { ok: true, restarting: true });
+        }
+
+        if (p === "/api/wifi-reset" && req.method === "POST") {
+          if (MODE !== "manage") return json(res, 403, { error: "manage mode only" });
+          await delay(200);
+          return json(res, 200, { ok: true, restarting: true });
+        }
+
+        if (p === "/api/factory-reset" && req.method === "POST") {
+          if (MODE !== "manage") return json(res, 403, { error: "manage mode only" });
+          await delay(200);
+          return json(res, 200, { ok: true, restarting: true });
+        }
+
+        // ----- /api/images endpoints -----
+
+        if (p === "/api/images" && req.method === "GET") {
+          if (MODE !== "manage") return json(res, 403, { error: "manage mode only" });
+          await delay(150);
+          return json(res, 200, {
+            images: Array.from(images.entries()).map(([name, size]) => ({
+              name, size,
+            })),
+          });
+        }
+
+        if (p === "/api/images" && req.method === "POST") {
+          if (MODE !== "manage") return json(res, 403, { error: "manage mode only" });
+          const url = new URL(req.url ?? "", "http://localhost");
+          const name = url.searchParams.get("name") ?? "";
+          if (!name.endsWith(".bin") || name.includes("/") || name.includes("..")) {
+            return json(res, 400, { error: "bad name" });
+          }
+          let received = 0;
+          req.on("data", (chunk) => (received += chunk.length));
+          await new Promise((r) => req.on("end", r));
+          await delay(400);
+          images.set(name, received);
+          return json(res, 200, { ok: true });
+        }
+
+        // /api/images/:name
+        const imgMatch = p.match(/^\/api\/images\/(.+)$/);
+        if (imgMatch) {
+          const name = decodeURIComponent(imgMatch[1]);
+          if (req.method === "GET") {
+            if (MODE !== "manage") return json(res, 403, { error: "manage mode only" });
+            const size = images.get(name);
+            if (size === undefined) return json(res, 404, { error: "not found" });
+            res.setHeader("Content-Type", "application/octet-stream");
+            res.setHeader("Content-Length", String(size));
+            res.end(Buffer.alloc(size));
+            return;
+          }
+          if (req.method === "DELETE") {
+            if (MODE !== "manage") return json(res, 403, { error: "manage mode only" });
+            if (!images.has(name)) return json(res, 404, { error: "not found" });
+            images.delete(name);
+            return json(res, 200, { ok: true });
+          }
         }
 
         // Unknown /api/* → let it 404 through Vite's default chain.
