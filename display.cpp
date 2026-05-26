@@ -1,8 +1,11 @@
 #include "display.h"
+#include "ui.h"
 #include <Arduino.h>
 #include <lvgl.h>
 #include <TFT_eSPI.h>
 #include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #define LVGL_TICK_PERIOD 5
 
@@ -61,4 +64,23 @@ void display_init_lvgl() {
   esp_timer_handle_t tick_timer;
   esp_timer_create(&tick_args, &tick_timer);
   esp_timer_start_periodic(tick_timer, LVGL_TICK_PERIOD * 1000);
+}
+
+// L23: All LVGL access happens on this task. Priority 15 is above AsyncTCP's
+// default (10) so network activity can't preempt a refresh in progress.
+// Pinned to core 1 so it runs alongside the Arduino loop (also core 1) but
+// never on core 0 where the WiFi driver lives. Stack is 16 KB — same headroom
+// reasoning as the old SET_LOOP_TASK_STACK_SIZE (the deepest chain is button
+// event → ui_update → ui_show_photos → photos_show_first → SD read → tft).
+static void lvgl_task(void *) {
+  for (;;) {
+    lv_timer_handler();
+    ui_update();
+    vTaskDelay(pdMS_TO_TICKS(5));
+  }
+}
+
+void display_start_lvgl_task() {
+  xTaskCreatePinnedToCore(lvgl_task, "lvgl", 16 * 1024, NULL, 15, NULL, 1);
+  Serial.println("[OK] LVGL task started");
 }

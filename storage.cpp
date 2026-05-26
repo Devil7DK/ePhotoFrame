@@ -35,7 +35,9 @@ void storage_init() {
     Serial.println("[ERROR] LittleFS init failed");
   else
     Serial.println("[OK] LittleFS mounted");
+}
 
+void storage_register_lvgl_drivers() {
   lv_fs_arduino_esp_littlefs_init();
   lv_fs_arduino_sd_init();
 }

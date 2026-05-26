@@ -91,9 +91,9 @@ static void register_routes() {
         return;
       }
       const char *ssid = wifi["ssid"];
-      const char *pwd  = wifi["password"] | "";
+      const char *pwd = wifi["password"] | "";
       size_t ssid_len = strlen(ssid);
-      size_t pwd_len  = strlen(pwd);
+      size_t pwd_len = strlen(pwd);
       if (ssid_len == 0) {
         req->send(400, "application/json", "{\"error\":\"empty ssid\"}");
         return;
@@ -105,7 +105,7 @@ static void register_routes() {
       config_set_wifi(ssid, pwd);
       config_commit_pending(true);  // L13: bypass debounce; we're about to restart.
       req->send(200, "application/json", "{\"ok\":true,\"restarting\":true}");
-      restart_requested = true;     // L5: ESP.restart() runs from loop() once response flushes.
+      restart_requested = true;  // L5: ESP.restart() runs from loop() once response flushes.
     });
   configPost->setMethod(HTTP_POST);
   server.addHandler(configPost);
@@ -136,6 +136,57 @@ static void register_routes() {
   });
 
   // ---------- /api/images endpoints (manage mode only) ----------
+
+  // Path-name validator shared by GET-by-name and DELETE.
+  auto is_safe_name = [](const String &name) {
+    if (name.length() == 0 || name.length() > 64) return false;
+    if (name.indexOf('/') >= 0) return false;
+    if (name.indexOf("..") >= 0) return false;
+    String lower = name;
+    lower.toLowerCase();
+    return lower.endsWith(".bin");
+  };
+
+  // Parses "/api/images/<name>" → "<name>", or empty if not under that path.
+  auto name_from_url = [](AsyncWebServerRequest *req) -> String {
+    static const char PREFIX[] = "/api/images/";
+    String url = req->url();
+    if (!url.startsWith(PREFIX)) return String();
+    return url.substring(sizeof(PREFIX) - 1);
+  };
+
+  // GET /api/images/:name — stream the .bin file from SD.
+  // dir() matcher matches anything under /api/images/ but not the bare
+  // /api/images (which is handled by the exact-match handler above).
+  server.on(AsyncURIMatcher::dir("/api/images"), HTTP_GET,
+            [is_safe_name, name_from_url](AsyncWebServerRequest *req) {
+              if (current_mode != MODE_MANAGE) {
+                req->send(403, "application/json", "{\"error\":\"manage mode only\"}");
+                return;
+              }
+              String name = name_from_url(req);
+              if (!is_safe_name(name)) {
+                req->send(400, "application/json", "{\"error\":\"bad name\"}");
+                return;
+              }
+              String path = String("/images/") + name;
+              if (!storage_sd_lock(1000)) {
+                req->send(503, "application/json", "{\"error\":\"sd busy\"}");
+                return;
+              }
+              if (!SD.exists(path)) {
+                storage_sd_unlock();
+                req->send(404, "application/json", "{\"error\":\"not found\"}");
+                return;
+              }
+              AsyncWebServerResponse *resp =
+                req->beginResponse(SD, path, "application/octet-stream");
+              // SD lock is held until the response is fully sent. Release on disconnect.
+              req->onDisconnect([]() {
+                storage_sd_unlock();
+              });
+              req->send(resp);
+            });
 
   // GET /api/images — list .bin files in /images
   server.on("/api/images", HTTP_GET, [](AsyncWebServerRequest *req) {
@@ -174,68 +225,31 @@ static void register_routes() {
     req->send(resp);
   });
 
-  // Path-name validator shared by GET-by-name and DELETE.
-  auto is_safe_name = [](const String &name) {
-    if (name.length() == 0 || name.length() > 64) return false;
-    if (name.indexOf('/') >= 0) return false;
-    if (name.indexOf("..") >= 0) return false;
-    String lower = name;
-    lower.toLowerCase();
-    return lower.endsWith(".bin");
-  };
-
-  // GET /api/images/:name — stream the .bin file from SD
-  server.on("^\\/api\\/images\\/(.+)$", HTTP_GET, [is_safe_name](AsyncWebServerRequest *req) {
-    if (current_mode != MODE_MANAGE) {
-      req->send(403, "application/json", "{\"error\":\"manage mode only\"}");
-      return;
-    }
-    String name = req->pathArg(0);
-    if (!is_safe_name(name)) {
-      req->send(400, "application/json", "{\"error\":\"bad name\"}");
-      return;
-    }
-    String path = String("/images/") + name;
-    if (!storage_sd_lock(1000)) {
-      req->send(503, "application/json", "{\"error\":\"sd busy\"}");
-      return;
-    }
-    if (!SD.exists(path)) {
-      storage_sd_unlock();
-      req->send(404, "application/json", "{\"error\":\"not found\"}");
-      return;
-    }
-    AsyncWebServerResponse *resp =
-        req->beginResponse(SD, path, "application/octet-stream");
-    // SD lock is held until the response is fully sent. Release on disconnect.
-    req->onDisconnect([]() { storage_sd_unlock(); });
-    req->send(resp);
-  });
-
   // DELETE /api/images/:name
-  server.on("^\\/api\\/images\\/(.+)$", HTTP_DELETE, [is_safe_name](AsyncWebServerRequest *req) {
-    if (current_mode != MODE_MANAGE) {
-      req->send(403, "application/json", "{\"error\":\"manage mode only\"}");
-      return;
-    }
-    String name = req->pathArg(0);
-    if (!is_safe_name(name)) {
-      req->send(400, "application/json", "{\"error\":\"bad name\"}");
-      return;
-    }
-    String path = String("/images/") + name;
-    if (!storage_sd_lock(1000)) {
-      req->send(503, "application/json", "{\"error\":\"sd busy\"}");
-      return;
-    }
-    bool ok = SD.remove(path);
-    storage_sd_unlock();
-    if (ok) {
-      req->send(200, "application/json", "{\"ok\":true}");
-    } else {
-      req->send(404, "application/json", "{\"error\":\"not found\"}");
-    }
-  });
+  server.on(AsyncURIMatcher::dir("/api/images"), HTTP_DELETE,
+            [is_safe_name, name_from_url](AsyncWebServerRequest *req) {
+              if (current_mode != MODE_MANAGE) {
+                req->send(403, "application/json", "{\"error\":\"manage mode only\"}");
+                return;
+              }
+              String name = name_from_url(req);
+              if (!is_safe_name(name)) {
+                req->send(400, "application/json", "{\"error\":\"bad name\"}");
+                return;
+              }
+              String path = String("/images/") + name;
+              if (!storage_sd_lock(1000)) {
+                req->send(503, "application/json", "{\"error\":\"sd busy\"}");
+                return;
+              }
+              bool ok = SD.remove(path);
+              storage_sd_unlock();
+              if (ok) {
+                req->send(200, "application/json", "{\"ok\":true}");
+              } else {
+                req->send(404, "application/json", "{\"error\":\"not found\"}");
+              }
+            });
 
   // POST /api/images?name=<name>.bin — raw body upload (browser converts to
   // .bin client-side, server just stores it).
@@ -319,6 +333,13 @@ static void start_mdns_when_connected() {
 }
 
 void web_server_begin(WebMode mode) {
+  // Idempotent — re-entering manage mode after a Back tap finds the server
+  // already running. Just update the mode (in case it matters for /api/mode)
+  // and return without re-registering routes or calling server.begin() again.
+  if (begin_called) {
+    current_mode = mode;
+    return;
+  }
   current_mode = mode;
   register_routes();
   server.begin();
