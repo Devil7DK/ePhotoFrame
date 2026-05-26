@@ -6,6 +6,29 @@ import { ManageView, SetupView } from "./views";
 
 type Mode = "setup" | "manage";
 
+const Footer = () => (
+  <footer class="app-footer">
+    <p>
+      by{" "}
+      <a
+        href="https://github.com/Devil7DK"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Dineshkumar T
+      </a>
+      {" · "}
+      <a
+        href="https://github.com/Devil7DK/ePhotoFrame"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Source
+      </a>
+    </p>
+  </footer>
+);
+
 export const App = () => {
   const [mode, setMode] = useState<Mode | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -20,19 +43,27 @@ export const App = () => {
       .catch((e) => setError(String(e)));
   }, []);
 
+  let body;
   if (error) {
-    return (
+    body = (
       <div class="status">
         <p>Failed to load: {error}</p>
       </div>
     );
-  }
-  if (!mode) {
-    return (
+  } else if (!mode) {
+    body = (
       <div class="status">
         <p>Loading…</p>
       </div>
     );
+  } else {
+    body = mode === "setup" ? <SetupView /> : <ManageView />;
   }
-  return mode === "setup" ? <SetupView /> : <ManageView />;
+
+  return (
+    <>
+      {body}
+      <Footer />
+    </>
+  );
 };
